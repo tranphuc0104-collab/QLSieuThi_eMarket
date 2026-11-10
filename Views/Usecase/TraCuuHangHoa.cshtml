@@ -1,0 +1,153 @@
+@model List<EMarket.Models.SanPham>
+@{
+    ViewData["Title"] = "UC3: Tra Cứu Thông Tin Hàng Hóa";
+    var danhMucs = ViewBag.DanhMucs as List<EMarket.Models.DanhMuc>;
+    var keyword = ViewBag.Keyword as string;
+    var selectedDM = ViewBag.SelectedDM as string;
+    var notFound = ViewBag.NotFound as bool? ?? false;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <span class="badge bg-primary mb-1">Use Case 3 (Mục 1.4.5 c)</span>
+        <h3 class="fw-bold mb-0">Tra Cứu Thông Tin Hàng Hóa</h3>
+        <p class="text-muted small">Khách hàng tìm kiếm hàng hóa, xem giá bán hiện tại và hạn sử dụng sản phẩm.</p>
+    </div>
+</div>
+
+<!-- Thanh Tìm Kiếm & Bộ Lọc Danh Mục -->
+<div class="card mb-4">
+    <div class="card-body p-4">
+        <form method="get" asp-action="TraCuuHangHoa" class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Tên hàng hóa hoặc Mã sản phẩm:</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                    <input type="text" name="keyword" class="form-control" placeholder="Nhập tên sản phẩm (Sữa, Omachi, Thịt, Omo, Cà chua...)" value="@keyword" />
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Lọc theo Danh mục:</label>
+                <select name="danhMuc" class="form-select">
+                    <option value="">-- Tất cả danh mục hàng hóa --</option>
+                    @if (danhMucs != null)
+                    {
+                        foreach (var dm in danhMucs)
+                        {
+                            <option value="@dm.MaDanhMuc" selected="@(selectedDM == dm.MaDanhMuc ? "selected" : null)">
+                                @dm.TenDanhMuc
+                            </option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col-md-2 align-self-end">
+                <button type="submit" class="btn btn-primary w-100 fw-bold">
+                    <i class="bi bi-filter me-1"></i> Tra cứu
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@if (notFound)
+{
+    <div class="alert alert-warning d-flex align-items-center p-3 mb-4" role="alert">
+        <i class="bi bi-search fs-3 me-3 text-warning"></i>
+        <div>
+            <h5 class="alert-heading fw-bold mb-1">Không tìm thấy hàng hóa</h5>
+            <div>Không có mặt hàng nào khớp với từ khóa "<strong>@keyword</strong>". Quý khách vui lòng kiểm tra lại tên hoặc mã sản phẩm.</div>
+        </div>
+    </div>
+}
+
+<!-- Kết Quả Tìm Kiếm Dưới Dạng Thẻ Sản Phẩm / Bảng -->
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold">
+            <i class="bi bi-boxes text-primary me-2"></i>Danh Sách Sản Phẩm (@Model.Count mặt hàng)
+        </h5>
+        <span class="badge bg-success">Dữ liệu thời gian thực</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 100px;">Mã SP</th>
+                        <th>Tên Sản Phẩm</th>
+                        <th>Danh Mục</th>
+                        <th>Quy Cách / Mô Tả</th>
+                        <th class="text-center">ĐVT</th>
+                        <th class="text-end">Giá Bán Hiện Tại</th>
+                        <th class="text-center">Hạn Sử Dụng</th>
+                        <th class="text-center">Tồn Kho</th>
+                        <th class="text-center">Hành Động</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Any())
+                    {
+                        foreach (var sp in Model)
+                        {
+                            var daysLeft = (sp.HanSuDung.HasValue) ? (sp.HanSuDung.Value - DateTime.Now).Days : 999;
+                            <tr>
+                                <td><span class="badge bg-light text-dark border">@sp.MaSP</span></td>
+                                <td>
+                                    <div class="fw-bold text-primary">@sp.TenSP</div>
+                                </td>
+                                <td><span class="badge bg-secondary">@sp.TenDanhMuc</span></td>
+                                <td><small class="text-muted">@sp.MoTa</small></td>
+                                <td class="text-center">@sp.DonViTinh</td>
+                                <td class="text-end">
+                                    <span class="fw-bold fs-6 text-danger">@sp.GiaBan.ToString("N0") đ</span>
+                                </td>
+                                <td class="text-center">
+                                    @if (daysLeft < 7)
+                                    {
+                                        <span class="badge bg-danger" title="Cận hạn sử dụng">
+                                            <i class="bi bi-alarm me-1"></i>@(sp.HanSuDung?.ToString("dd/MM/yyyy")) (Còn @daysLeft ngày)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-dark border">
+                                            @(sp.HanSuDung?.ToString("dd/MM/yyyy"))
+                                        </span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    @if (sp.SoLuongTon > 20)
+                                    {
+                                        <span class="badge bg-success-subtle text-success border border-success">Còn hàng (@sp.SoLuongTon)</span>
+                                    }
+                                    else if (sp.SoLuongTon > 0)
+                                    {
+                                        <span class="badge bg-warning-subtle text-warning border border-warning">Sắp hết (@sp.SoLuongTon)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger border border-danger">Hết hàng (0)</span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <a asp-action="DatHang" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-cart-plus"></i> Đặt mua
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="9" class="text-center py-4 text-muted">
+                                Không có sản phẩm nào phù hợp với bộ lọc tìm kiếm.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

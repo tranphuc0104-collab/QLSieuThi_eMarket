@@ -1,0 +1,157 @@
+@model List<EMarket.Models.TonKho>
+@{
+    ViewData["Title"] = "UC8: Quản Lý Tồn Kho & Cảnh Báo";
+    var khos = ViewBag.Khos as List<EMarket.Models.Kho>;
+    var selectedKho = ViewBag.SelectedKho as string;
+    var selectedFilter = ViewBag.SelectedFilter as string;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <span class="badge bg-warning text-dark mb-1">Use Case 8 (Mục 1.4.5 d)</span>
+        <h3 class="fw-bold mb-0">Quản Lý Tồn Kho & Cảnh Báo Định Mức</h3>
+        <p class="text-muted small">Theo dõi số lượng hàng đã bán, số lượng tồn theo từng kho và hệ thống cảnh báo dưới mức tối thiểu hoặc vượt mức tối đa.</p>
+    </div>
+    <div>
+        <a asp-action="NhapHang" class="btn btn-warning text-dark">
+            <i class="bi bi-box-arrow-in-down me-1"></i> Nhập thêm hàng vào kho
+        </a>
+    </div>
+</div>
+
+<!-- Thẻ Chỉ Số Cảnh Báo Kho -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card bg-white border">
+            <span class="text-muted small text-uppercase fw-semibold">Tổng mặt hàng quản lý</span>
+            <h3 class="fw-bold my-1 text-primary">@Model.Count</h3>
+            <small class="text-muted">Phân bố qua các kho</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card bg-white border">
+            <span class="text-muted small text-uppercase fw-semibold">Tổng lượng hàng tồn</span>
+            <h3 class="fw-bold my-1 text-success">@ViewBag.TongSoLuongTon</h3>
+            <small class="text-muted">Đang lưu trữ thực tế</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card bg-white border border-danger">
+            <span class="text-danger small text-uppercase fw-bold"><i class="bi bi-arrow-down-circle me-1"></i> Dưới mức tối thiểu</span>
+            <h3 class="fw-bold my-1 text-danger">@ViewBag.SoCanhBaoDuoi</h3>
+            <small class="text-danger">Cần nhập bổ sung ngay</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card bg-white border border-warning">
+            <span class="text-warning-emphasis small text-uppercase fw-bold"><i class="bi bi-arrow-up-circle me-1"></i> Vượt mức tối đa</span>
+            <h3 class="fw-bold my-1 text-warning-emphasis">@ViewBag.SoCanhBaoVuot</h3>
+            <small class="text-muted">Nguy cơ ứ đọng diện tích</small>
+        </div>
+    </div>
+</div>
+
+<!-- Bộ Lọc Theo Kho & Cảnh Báo -->
+<div class="card mb-4">
+    <div class="card-body p-3">
+        <form method="get" asp-action="TonKho" class="row g-3 align-items-center">
+            <div class="col-md-5">
+                <label class="form-label small fw-semibold">Lọc theo Kho:</label>
+                <select name="maKho" class="form-select">
+                    <option value="">-- Tất cả các kho hàng --</option>
+                    @if (khos != null)
+                    {
+                        foreach (var k in khos)
+                        {
+                            <option value="@k.MaKho" selected="@(selectedKho == k.MaKho ? "selected" : null)">
+                                @k.TenKho (@k.MaKho)
+                            </option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold">Tình trạng cảnh báo định mức:</label>
+                <select name="filterCanhBao" class="form-select">
+                    <option value="">-- Tất cả trạng thái --</option>
+                    <option value="DuoiToiThieu" selected="@(selectedFilter == "DuoiToiThieu" ? "selected" : null)">⚠️ Cảnh báo: Dưới mức tối thiểu</option>
+                    <option value="VuotToiDa" selected="@(selectedFilter == "VuotToiDa" ? "selected" : null)">⚠️ Cảnh báo: Vượt mức tối đa</option>
+                    <option value="BinhThuong" selected="@(selectedFilter == "BinhThuong" ? "selected" : null)">✓ Tồn kho bình thường</option>
+                </select>
+            </div>
+            <div class="col-md-3 align-self-end">
+                <button type="submit" class="btn btn-primary w-100 fw-bold">
+                    <i class="bi bi-filter me-1"></i> Lọc Dữ Liệu Tồn Kho
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bảng Tồn Kho -->
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-boxes text-warning me-2"></i>Báo Cáo Tồn Kho Theo Từng Kho Hàng</h5>
+        <span class="badge bg-secondary">Thời gian thực</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Kho Chứa</th>
+                        <th>Mã SP</th>
+                        <th>Tên Hàng Hóa</th>
+                        <th class="text-center">ĐVT</th>
+                        <th class="text-center">Số Lượng Đã Bán</th>
+                        <th class="text-center">Định Mức [Min - Max]</th>
+                        <th class="text-center">Số Lượng Tồn Thực Tế</th>
+                        <th class="text-center">Cảnh Báo Tồn Kho</th>
+                        <th class="text-center">Thao Tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var tk in Model)
+                    {
+                        <tr>
+                            <td><strong>@tk.TenKho</strong><br /><small class="text-muted"><code>@tk.MaKho</code></small></td>
+                            <td><code>@tk.MaSP</code></td>
+                            <td><strong class="text-dark">@tk.TenSP</strong></td>
+                            <td class="text-center">@tk.DonViTinh</td>
+                            <td class="text-center"><span class="badge bg-secondary">@tk.SoLuongDaBan</span></td>
+                            <td class="text-center"><small class="text-muted">[@tk.MucToiThieu - @tk.MucToiDa]</small></td>
+                            <td class="text-center">
+                                <span class="fs-6 fw-bold">@tk.SoLuongTon</span>
+                            </td>
+                            <td class="text-center">
+                                @if (tk.TrangThaiCanhBao == "Dưới mức tối thiểu" || tk.SoLuongTon < tk.MucToiThieu)
+                                {
+                                    <span class="badge bg-danger p-2">
+                                        <i class="bi bi-exclamation-triangle-fill me-1"></i> Cảnh báo: Dưới mức tối thiểu (@tk.SoLuongTon &lt; @tk.MucToiThieu)
+                                    </span>
+                                }
+                                else if (tk.TrangThaiCanhBao == "Vượt mức tối đa" || tk.SoLuongTon > tk.MucToiDa)
+                                {
+                                    <span class="badge bg-warning text-dark p-2">
+                                        <i class="bi bi-exclamation-circle-fill me-1"></i> Cảnh báo: Vượt mức tối đa (@tk.SoLuongTon &gt; @tk.MucToiDa)
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success-subtle text-success border border-success p-2">
+                                        <i class="bi bi-check-circle me-1"></i> Tồn kho bình thường
+                                    </span>
+                                }
+                            </td>
+                            <td class="text-center">
+                                <a asp-action="NhapHang" class="btn btn-sm btn-outline-warning text-dark">
+                                    <i class="bi bi-plus-lg"></i> Nhập kho
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

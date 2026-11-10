@@ -1,0 +1,42 @@
+@model EMarket.Models.LoginViewModel
+@{
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Đăng nhập";
+}
+
+<div class="row justify-content-center">
+    <div class="col-sm-10 col-md-7 col-lg-5">
+        <div class="card auth-card">
+            <div class="card-body p-4 p-md-5">
+                <h2 class="h4 fw-bold mb-1">Chào mừng trở lại</h2>
+                <p class="text-secondary mb-4">Đăng nhập để tiếp tục sử dụng EMarket.</p>
+                <form asp-action="Login" method="post">
+                    <input asp-for="ReturnUrl" type="hidden" />
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+                    <div class="mb-3">
+                        <label asp-for="UserName" class="form-label fw-semibold"></label>
+                        <input asp-for="UserName" class="form-control form-control-lg" autocomplete="username" autofocus />
+                        <span asp-validation-for="UserName" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-4">
+                        <label asp-for="Password" class="form-label fw-semibold"></label>
+                        <input asp-for="Password" class="form-control form-control-lg" autocomplete="current-password" />
+                        <span asp-validation-for="Password" class="text-danger small"></span>
+                    </div>
+                    <button class="btn btn-primary btn-lg w-100" type="submit">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> Đăng nhập
+                    </button>
+                </form>
+                <div class="text-center mt-4 text-secondary">
+                    Chưa có tài khoản?
+                    <a asp-action="Register" class="fw-semibold text-decoration-none">Đăng ký khách hàng</a>
+                </div>
+            </div>
+        </div>
+        <p class="text-center small text-secondary mt-3">Nhân viên đăng nhập bằng tài khoản trong cơ sở dữ liệu.</p>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

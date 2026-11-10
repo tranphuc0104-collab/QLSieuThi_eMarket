@@ -1,0 +1,169 @@
+@model EMarket.Models.KhachHang
+@{
+    ViewData["Title"] = "UC6: Quản Lý Điểm Mua Hàng";
+    var khachHangs = ViewBag.KhachHangs as List<EMarket.Models.KhachHang>;
+    var orders = ViewBag.Orders as List<EMarket.Models.DonHang>;
+    var success = ViewBag.Success as string;
+    var error = ViewBag.Error as string;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <span class="badge bg-success mb-1">Use Case 6 (Mục 1.4.5 g)</span>
+        <h3 class="fw-bold mb-0">Quản Lý Điểm Mua Hàng & Đổi Thưởng</h3>
+        <p class="text-muted small">Tra cứu điểm thẻ thành viên từ lịch sử mua sắm và quy đổi điểm thưởng sang Voucher giảm giá.</p>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(success))
+{
+    <div class="alert alert-success d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-award-fill fs-3 me-3"></i>
+        <div>
+            <h5 class="alert-heading fw-bold mb-1">Quy Đổi Thành Công!</h5>
+            <div>@success</div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-warning d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-exclamation-circle-fill fs-3 me-3 text-warning"></i>
+        <div>
+            <h5 class="alert-heading fw-bold mb-1">Thông Báo Điểm Thưởng</h5>
+            <div>@error</div>
+        </div>
+    </div>
+}
+
+<!-- Chọn Khách Hàng Cần Tra Cứu Điểm -->
+<div class="card mb-4">
+    <div class="card-body p-4">
+        <form method="get" asp-action="DiemTichLuy" class="row g-3 align-items-center">
+            <div class="col-md-9">
+                <label class="form-label fw-semibold">Chọn Khách Hàng để kiểm tra điểm tích lũy:</label>
+                <select name="maKhachHang" class="form-select form-select-lg" required>
+                    <option value="">-- Chọn khách hàng thành viên --</option>
+                    @if (khachHangs != null)
+                    {
+                        foreach (var k in khachHangs)
+                        {
+                            <option value="@k.MaKhachHang" selected="@(Model?.MaKhachHang == k.MaKhachHang ? "selected" : null)">
+                                @k.MaKhachHang - @k.HoTen (Điểm hiện tại: @k.DiemTichLuy pts - @k.TenLoai)
+                            </option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col-md-3 align-self-end">
+                <button type="submit" class="btn btn-primary btn-lg w-100">
+                    <i class="bi bi-search me-1"></i> Tra Cứu Điểm
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@if (Model != null)
+{
+    <div class="row">
+        <!-- Thông tin thẻ thành viên & Điểm tích lũy -->
+        <div class="col-md-5">
+            <div class="card shadow-sm mb-4 border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0 fw-bold"><i class="bi bi-credit-card-2-front me-2"></i>Thẻ Thành Viên EMarket</h5>
+                </div>
+                <div class="card-body p-4 text-center">
+                    <div class="badge bg-warning text-dark fs-6 px-3 py-2 mb-3">
+                        <i class="bi bi-shield-check me-1"></i> Thẻ VIP / Thân Thiết
+                    </div>
+                    <h4 class="fw-bold text-dark mb-1">@Model.HoTen</h4>
+                    <p class="text-muted small mb-3">Mã KH: <code>@Model.MaKhachHang</code> | ĐT: @Model.SoDienThoai</p>
+
+                    <div class="p-3 bg-light rounded-3 my-3 border">
+                        <span class="text-muted small text-uppercase fw-semibold">Điểm Thưởng Tích Lũy Hiện Tại</span>
+                        <h1 class="display-4 fw-bold text-success my-2">@Model.DiemTichLuy</h1>
+                        <small class="text-muted">Tương đương giá trị quy đổi: <strong>@((Model.DiemTichLuy * 1000).ToString("N0")) VNĐ</strong></small>
+                    </div>
+
+                    <!-- Form Quy Đổi Điểm -->
+                    <div class="card border-success mt-4">
+                        <div class="card-header bg-success text-white py-2 fw-semibold">
+                            <i class="bi bi-gift-fill me-1"></i> Quy Đổi Điểm Sang Voucher
+                        </div>
+                        <div class="card-body text-start">
+                            <form method="post" asp-action="QuyDoiDiem">
+                                <input type="hidden" name="maKhachHang" value="@Model.MaKhachHang" />
+                                <div class="mb-3">
+                                    <label class="form-label small fw-semibold">Nhập số điểm muốn đổi (1 điểm = 1.000đ):</label>
+                                    <input type="number" name="soDiemDoi" class="form-control" min="10" max="@Model.DiemTichLuy" step="10" value="50" required />
+                                </div>
+                                <button type="submit" class="btn btn-success w-100 fw-bold" @(Model.DiemTichLuy < 10 ? "disabled" : "")>
+                                    <i class="bi bi-check2-circle me-1"></i> Xác Nhận Đổi Thưởng
+                                </button>
+                                @if (Model.DiemTichLuy < 10)
+                                {
+                                    <div class="small text-danger text-center mt-2">Cần tối thiểu 10 điểm để quy đổi voucher.</div>
+                                }
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lịch sử mua hàng tích điểm -->
+        <div class="col-md-7">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history me-1 text-primary"></i>Lịch Sử Mua Hàng & Tích Lũy Điểm</h6>
+                    <span class="badge bg-secondary">@(orders?.Count ?? 0) đơn hàng</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Mã Đơn</th>
+                                    <th>Ngày Mua</th>
+                                    <th class="text-end">Tổng Tiền</th>
+                                    <th class="text-center">Điểm Nhận Được</th>
+                                    <th class="text-center">Trạng Thái</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (orders != null && orders.Any())
+                                {
+                                    foreach (var ord in orders)
+                                    {
+                                        var diemNhan = (int)(ord.TongTien / 10000);
+                                        <tr>
+                                            <td><code>@ord.MaDonHang</code></td>
+                                            <td>@ord.NgayDat?.ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td class="text-end fw-semibold">@ord.TongTien.ToString("N0") đ</td>
+                                            <td class="text-center">
+                                                <span class="badge bg-success-subtle text-success border border-success">+@diemNhan pts</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge bg-light text-dark border">@ord.TrangThai</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4 text-muted">
+                                            Khách hàng chưa có lịch sử đơn hàng nào trong hệ thống.
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}

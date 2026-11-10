@@ -1,0 +1,198 @@
+@{
+    ViewData["Title"] = "Tổng Quan Hệ Thống";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-1">Bảng Điều Khiển Hệ Thống EMarket</h3>
+        <p class="text-muted mb-0">Hệ thống phân tích & thiết kế theo 9 Use Case nghiệp vụ siêu thị</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-controller="Usecase" asp-action="BanHang" class="btn btn-primary">
+            <i class="bi bi-cart-check me-1"></i> Bán Hàng Nhanh
+        </a>
+        <a asp-controller="Usecase" asp-action="NhapHang" class="btn btn-outline-secondary">
+            <i class="bi bi-box-arrow-in-down me-1"></i> Nhập Kho
+        </a>
+    </div>
+</div>
+
+<!-- 4 Thẻ Thống Kê Chính -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card bg-primary text-white shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-white-50 small text-uppercase fw-semibold">Tổng đơn hàng</div>
+                    <h3 class="fw-bold my-1">@ViewBag.TotalOrders</h3>
+                    <small class="text-white-50"><i class="bi bi-arrow-up"></i> Ghi nhận từ hệ thống</small>
+                </div>
+                <div class="fs-1 text-white-50"><i class="bi bi-receipt"></i></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card bg-success text-white shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-white-50 small text-uppercase fw-semibold">Doanh số bán ra</div>
+                    <h3 class="fw-bold my-1">@(((decimal)ViewBag.TotalRevenue).ToString("N0")) đ</h3>
+                    <small class="text-white-50"><i class="bi bi-cash-stack"></i> Doanh thu tích lũy</small>
+                </div>
+                <div class="fs-1 text-white-50"><i class="bi bi-currency-dollar"></i></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card bg-warning text-dark shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-dark-50 small text-uppercase fw-semibold">Cảnh báo tồn kho</div>
+                    <h3 class="fw-bold my-1">@ViewBag.WarningStock</h3>
+                    <small class="text-danger fw-semibold"><i class="bi bi-exclamation-circle"></i> Vượt/Dưới định mức</small>
+                </div>
+                <div class="fs-1 text-dark-50"><i class="bi bi-boxes"></i></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card bg-danger text-white shadow-sm">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-white-50 small text-uppercase fw-semibold">Công nợ quá hạn</div>
+                    <h3 class="fw-bold my-1">@ViewBag.DebtWarning</h3>
+                    <small class="text-white-50"><i class="bi bi-alarm"></i> Cần xử lý thu hồi</small>
+                </div>
+                <div class="fs-1 text-white-50"><i class="bi bi-exclamation-triangle"></i></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lưới 9 Use Case trực quan -->
+<div class="card mb-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-diagram-3-fill text-primary me-2"></i>Bản Đồ 9 Phân Hệ Use Case Nghiệp Vụ</h5>
+        <span class="badge bg-primary">Đặc tả chuẩn từ Đồ án docx</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card h-100 border-primary border-opacity-25 hover-shadow">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-primary">UC 1</span>
+                            <h6 class="fw-bold mb-0">Theo dõi đơn hàng</h6>
+                        </div>
+                        <p class="text-muted small">Khách hàng kiểm tra trạng thái đơn: đang xử lý, đã hoàn tất theo mã đơn hàng.</p>
+                        <a asp-controller="Usecase" asp-action="TheoDoiDonHang" class="btn btn-sm btn-outline-primary w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-primary border-opacity-25">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-primary">UC 2</span>
+                            <h6 class="fw-bold mb-0">Đặt hàng trực tuyến</h6>
+                        </div>
+                        <p class="text-muted small">Khách hàng chọn sản phẩm, kiểm tra tồn kho tự động, tạo đơn hàng thành công.</p>
+                        <a asp-controller="Usecase" asp-action="DatHang" class="btn btn-sm btn-outline-primary w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-primary border-opacity-25">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-primary">UC 3</span>
+                            <h6 class="fw-bold mb-0">Tra cứu hàng hóa</h6>
+                        </div>
+                        <p class="text-muted small">Tìm kiếm sản phẩm theo tên/mã, xem đơn giá bán hiện tại và hạn sử dụng sản phẩm.</p>
+                        <a asp-controller="Usecase" asp-action="TraCuuHangHoa" class="btn btn-sm btn-outline-primary w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-success border-opacity-25">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-success">UC 4</span>
+                            <h6 class="fw-bold mb-0">Quản lý bán hàng</h6>
+                        </div>
+                        <p class="text-muted small">Nhân viên lập đơn hàng, áp giá riêng/niêm yết, trừ tồn kho và cập nhật số lượng đã bán.</p>
+                        <a asp-controller="Usecase" asp-action="BanHang" class="btn btn-sm btn-outline-success w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-success border-opacity-25">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-success">UC 5</span>
+                            <h6 class="fw-bold mb-0">Quản lý khách hàng</h6>
+                        </div>
+                        <p class="text-muted small">Chăm sóc khách hàng: Thêm mới, phân nhóm khách VIP, cập nhật thông tin và xóa khách hàng.</p>
+                        <a asp-controller="Usecase" asp-action="KhachHang" class="btn btn-sm btn-outline-success w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-success border-opacity-25">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-success">UC 6</span>
+                            <h6 class="fw-bold mb-0">Quản lý điểm mua hàng</h6>
+                        </div>
+                        <p class="text-muted small">Tra cứu điểm thẻ thành viên từ lịch sử mua hàng, xử lý quy đổi điểm thưởng ra voucher mua sắm.</p>
+                        <a asp-controller="Usecase" asp-action="DiemTichLuy" class="btn btn-sm btn-outline-success w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-warning border-opacity-50">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-warning text-dark">UC 7</span>
+                            <h6 class="fw-bold mb-0">Quản lý nhập hàng</h6>
+                        </div>
+                        <p class="text-muted small">Nhân viên kho tiếp nhận lô hàng từ Nhà cung cấp, lập phiếu nhập và tăng số lượng tồn kho.</p>
+                        <a asp-controller="Usecase" asp-action="NhapHang" class="btn btn-sm btn-outline-warning text-dark w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-warning border-opacity-50">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-warning text-dark">UC 8</span>
+                            <h6 class="fw-bold mb-0">Quản lý tồn kho</h6>
+                        </div>
+                        <p class="text-muted small">Theo dõi số lượng đã bán, kiểm kê theo từng kho và nhận cảnh báo dưới tối thiểu / vượt tối đa.</p>
+                        <a asp-controller="Usecase" asp-action="TonKho" class="btn btn-sm btn-outline-warning text-dark w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card h-100 border-danger border-opacity-50">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-danger">UC 9</span>
+                            <h6 class="fw-bold mb-0">Quản lý công nợ</h6>
+                        </div>
+                        <p class="text-muted small">Theo dõi công nợ Khách hàng (phải thu) & Nhà cung cấp (phải trả), cảnh báo nợ quá hạn / vượt mức.</p>
+                        <a asp-controller="Usecase" asp-action="CongNo" class="btn btn-sm btn-outline-danger w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

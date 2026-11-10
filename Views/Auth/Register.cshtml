@@ -1,0 +1,67 @@
+@model EMarket.Models.RegisterViewModel
+@{
+    Layout = "_AuthLayout";
+    ViewData["Title"] = "Đăng ký";
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-9 col-lg-7">
+        <div class="card auth-card">
+            <div class="card-body p-4 p-md-5">
+                <h2 class="h4 fw-bold mb-1">Tạo tài khoản khách hàng</h2>
+                <p class="text-secondary mb-4">Thông tin đăng ký được lưu trực tiếp vào SQL Server.</p>
+                <form asp-action="Register" method="post">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="FullName" class="form-label fw-semibold"></label>
+                            <input asp-for="FullName" class="form-control" autocomplete="name" />
+                            <span asp-validation-for="FullName" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="UserName" class="form-label fw-semibold"></label>
+                            <input asp-for="UserName" class="form-control" autocomplete="username" />
+                            <span asp-validation-for="UserName" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="Email" class="form-label fw-semibold"></label>
+                            <input asp-for="Email" class="form-control" autocomplete="email" />
+                            <span asp-validation-for="Email" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="PhoneNumber" class="form-label fw-semibold"></label>
+                            <input asp-for="PhoneNumber" class="form-control" autocomplete="tel" />
+                            <span asp-validation-for="PhoneNumber" class="text-danger small"></span>
+                        </div>
+                        <div class="col-12 mb-3">
+                            <label asp-for="Address" class="form-label fw-semibold"></label>
+                            <input asp-for="Address" class="form-control" autocomplete="street-address" />
+                            <span asp-validation-for="Address" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="Password" class="form-label fw-semibold"></label>
+                            <input asp-for="Password" class="form-control" autocomplete="new-password" />
+                            <span asp-validation-for="Password" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <label asp-for="ConfirmPassword" class="form-label fw-semibold"></label>
+                            <input asp-for="ConfirmPassword" class="form-control" autocomplete="new-password" />
+                            <span asp-validation-for="ConfirmPassword" class="text-danger small"></span>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-lg w-100" type="submit">
+                        <i class="bi bi-person-plus me-1"></i> Đăng ký
+                    </button>
+                </form>
+                <div class="text-center mt-4 text-secondary">
+                    Đã có tài khoản?
+                    <a asp-action="Login" class="fw-semibold text-decoration-none">Đăng nhập</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

@@ -1,0 +1,236 @@
+@model List<EMarket.Models.KhachHang>
+@{
+    ViewData["Title"] = "UC5: Quản Lý Thông Tin Khách Hàng";
+    var loaiKHs = ViewBag.LoaiKhachHangs as List<EMarket.Models.LoaiKhachHang>;
+    var nhanViens = ViewBag.NhanViens as List<EMarket.Models.NhanVien>;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <span class="badge bg-success mb-1">Use Case 5 (Mục 1.4.5 e)</span>
+        <h3 class="fw-bold mb-0">Quản Lý Thông Tin Khách Hàng</h3>
+        <p class="text-muted small">Phân hệ Chăm sóc khách hàng: Thêm mới, phân nhóm khách VIP, cập nhật thông tin và xóa khách hàng.</p>
+    </div>
+    <div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalThemKH">
+            <i class="bi bi-person-plus-fill me-1"></i> Thêm Khách Hàng Mới
+        </button>
+    </div>
+</div>
+
+<!-- Bảng Danh Sách Khách Hàng -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-people-fill text-primary me-2"></i>Danh Sách Khách Hàng (@Model.Count)</h5>
+        <span class="badge bg-info">CSKH EMarket</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Mã KH</th>
+                        <th>Họ Và Tên</th>
+                        <th>Phân Loại</th>
+                        <th>Số Điện Thoại</th>
+                        <th>Email</th>
+                        <th>Địa Chỉ</th>
+                        <th class="text-center">Điểm Tích Lũy</th>
+                        <th class="text-center">Thao Tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var kh in Model)
+                    {
+                        <tr>
+                            <td><code>@kh.MaKhachHang</code></td>
+                            <td>
+                                <strong class="text-dark">@kh.HoTen</strong>
+                            </td>
+                            <td>
+                                @if (kh.MaLoai == "LKH03")
+                                {
+                                    <span class="badge bg-warning text-dark"><i class="bi bi-star-fill me-1"></i>VIP</span>
+                                }
+                                else if (kh.MaLoai == "LKH02")
+                                {
+                                    <span class="badge bg-info text-dark">Thân Thiết</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">Thông Thường</span>
+                                }
+                            </td>
+                            <td>@kh.SoDienThoai</td>
+                            <td><small class="text-muted">@kh.Email</small></td>
+                            <td><small>@kh.DiaChi</small></td>
+                            <td class="text-center">
+                                <span class="badge bg-success fs-6">@kh.DiemTichLuy pts</span>
+                            </td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditModal('@kh.MaKhachHang', '@kh.HoTen', '@kh.SoDienThoai', '@kh.Email', '@kh.DiaChi', '@kh.MaLoai', '@kh.MaNV')">
+                                    <i class="bi bi-pencil-square"></i> Sửa
+                                </button>
+                                <form asp-action="XoaKhachHang" method="post" class="d-inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa khách hàng @kh.HoTen này không?');">
+                                    <input type="hidden" name="maKhachHang" value="@kh.MaKhachHang" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i> Xóa
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Thêm Khách Hàng -->
+<div class="modal fade" id="modalThemKH" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form asp-action="ThemKhachHang" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-person-plus me-2 text-primary"></i>Thêm Mới Khách Hàng</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Mã khách hàng: <span class="text-danger">*</span></label>
+                            <input type="text" name="MaKhachHang" class="form-control" placeholder="Ví dụ: KH05" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Họ và tên: <span class="text-danger">*</span></label>
+                            <input type="text" name="HoTen" class="form-control" placeholder="Nguyễn Văn A" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Phân loại khách:</label>
+                            <select name="MaLoai" class="form-select">
+                                @if (loaiKHs != null)
+                                {
+                                    foreach (var l in loaiKHs)
+                                    {
+                                        <option value="@l.MaLoai">@l.TenLoai</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Nhân viên CSKH phụ trách:</label>
+                            <select name="MaNV" class="form-select">
+                                @if (nhanViens != null)
+                                {
+                                    foreach (var nv in nhanViens)
+                                    {
+                                        <option value="@nv.MaNV">@nv.HoTen (@nv.VaiTro)</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Số điện thoại:</label>
+                            <input type="tel" name="SoDienThoai" class="form-control" placeholder="09xxxxxxxx" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Email:</label>
+                            <input type="email" name="Email" class="form-control" placeholder="example@email.com" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Địa chỉ:</label>
+                            <input type="text" name="DiaChi" class="form-control" placeholder="Số nhà, đường, phường, TP..." />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary fw-bold">Lưu Khách Hàng</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Sửa Khách Hàng -->
+<div class="modal fade" id="modalSuaKH" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form asp-action="SuaKhachHang" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2 text-primary"></i>Cập Nhật Thông Tin Khách Hàng</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Mã khách hàng (Khóa chính):</label>
+                            <input type="text" id="editMaKH" name="MaKhachHang" class="form-control bg-light" readonly />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Họ và tên: <span class="text-danger">*</span></label>
+                            <input type="text" id="editHoTen" name="HoTen" class="form-control" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Phân loại khách:</label>
+                            <select id="editMaLoai" name="MaLoai" class="form-select">
+                                @if (loaiKHs != null)
+                                {
+                                    foreach (var l in loaiKHs)
+                                    {
+                                        <option value="@l.MaLoai">@l.TenLoai</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Nhân viên CSKH phụ trách:</label>
+                            <select id="editMaNV" name="MaNV" class="form-select">
+                                @if (nhanViens != null)
+                                {
+                                    foreach (var nv in nhanViens)
+                                    {
+                                        <option value="@nv.MaNV">@nv.HoTen (@nv.VaiTro)</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Số điện thoại:</label>
+                            <input type="tel" id="editSoDienThoai" name="SoDienThoai" class="form-control" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Email:</label>
+                            <input type="email" id="editEmail" name="Email" class="form-control" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Địa chỉ:</label>
+                            <input type="text" id="editDiaChi" name="DiaChi" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-success fw-bold">Lưu Thay Đổi</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function openEditModal(ma, ten, phone, email, diaChi, loai, nv) {
+        document.getElementById("editMaKH").value = ma;
+        document.getElementById("editHoTen").value = ten;
+        document.getElementById("editSoDienThoai").value = phone;
+        document.getElementById("editEmail").value = email;
+        document.getElementById("editDiaChi").value = diaChi;
+        document.getElementById("editMaLoai").value = loai;
+        document.getElementById("editMaNV").value = nv;
+
+        const modal = new bootstrap.Modal(document.getElementById("modalSuaKH"));
+        modal.show();
+    }
+</script>
+}

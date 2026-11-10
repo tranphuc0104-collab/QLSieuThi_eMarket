@@ -1,0 +1,178 @@
+@model EMarket.Models.DonHang
+@{
+    ViewData["Title"] = "UC1: Theo Dõi Quá Trình Xử Lý Đơn Hàng";
+    var allOrders = ViewBag.AllOrders as List<EMarket.Models.DonHang>;
+    var searchCode = ViewBag.SearchCode as string;
+    var error = ViewBag.Error as string;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <span class="badge bg-primary mb-1">Use Case 1 (Mục 1.4.5 a)</span>
+        <h3 class="fw-bold mb-0">Theo Dõi Quá Trình Xử Lý Đơn Hàng</h3>
+        <p class="text-muted small">Dành cho Khách Hàng kiểm tra tiến độ tiếp nhận, chuẩn bị và hoàn tất đơn hàng.</p>
+    </div>
+    <a asp-action="DatHang" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-cart-plus me-1"></i> Tạo đơn hàng mới
+    </a>
+</div>
+
+<!-- Form Tìm Kiếm Mã Đơn Hàng -->
+<div class="card mb-4">
+    <div class="card-body p-4">
+        <form method="get" asp-action="TheoDoiDonHang" class="row g-3 align-items-center">
+            <div class="col-md-7">
+                <label class="form-label fw-semibold">Nhập mã đơn hàng cần tra cứu:</label>
+                <div class="input-group input-group-lg">
+                    <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+                    <input type="text" name="maDonHang" class="form-control" placeholder="Ví dụ: DH20261101, DH20261102..." value="@searchCode" required />
+                </div>
+            </div>
+            <div class="col-md-3 align-self-end">
+                <button type="submit" class="btn btn-primary btn-lg w-100">
+                    <i class="bi bi-arrow-right-circle me-1"></i> Tra cứu đơn hàng
+                </button>
+            </div>
+            <div class="col-md-2 align-self-end">
+                <a asp-action="TheoDoiDonHang" class="btn btn-outline-secondary btn-lg w-100">Làm mới</a>
+            </div>
+        </form>
+
+        <div class="mt-3">
+            <small class="text-muted">Gợi ý mã có sẵn trong cơ sở dữ liệu: </small>
+            @if (allOrders != null)
+            {
+                foreach (var o in allOrders.Take(4))
+                {
+                    <a href="?maDonHang=@o.MaDonHang" class="badge bg-light text-dark border text-decoration-none me-1">@o.MaDonHang (@o.TrangThai)</a>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-x-octagon-fill fs-4 me-3"></i>
+        <div>
+            <h6 class="alert-heading fw-bold mb-1">Không tìm thấy thông tin</h6>
+            <div>@error</div>
+        </div>
+    </div>
+}
+
+@if (Model != null)
+{
+    <div class="card mb-4 border-primary">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <span class="fw-bold fs-5"><i class="bi bi-receipt me-2"></i>Đơn hàng: @Model.MaDonHang</span>
+            @if (Model.TrangThai == "Đã hoàn tất")
+            {
+                <span class="badge bg-success fs-6"><i class="bi bi-check-circle-fill me-1"></i> Đã hoàn tất</span>
+            }
+            else
+            {
+                <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split me-1"></i> Đang xử lý</span>
+            }
+        </div>
+        <div class="card-body p-4">
+            <!-- Tiến trình xử lý (Timeline) -->
+            <div class="mb-4">
+                <h6 class="fw-bold text-uppercase text-muted small mb-3">Tiến trình xử lý đơn hàng:</h6>
+                <div class="d-flex justify-content-between position-relative px-4">
+                    <div class="text-center">
+                        <div class="rounded-circle bg-success text-white d-inline-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <div class="mt-2 fw-semibold small">Đặt hàng thành công</div>
+                        <div class="text-muted small">@Model.NgayDat?.ToString("dd/MM/yyyy HH:mm")</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="rounded-circle @(Model.TrangThai == "Đã hoàn tất" ? "bg-success" : "bg-warning") text-white d-inline-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                            <i class="bi bi-box-seam"></i>
+                        </div>
+                        <div class="mt-2 fw-semibold small">Kiểm kho & Soạn hàng</div>
+                        <div class="text-muted small">Đã xác nhận</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="rounded-circle @(Model.TrangThai == "Đã hoàn tất" ? "bg-success" : "bg-secondary") text-white d-inline-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                            <i class="bi bi-truck"></i>
+                        </div>
+                        <div class="mt-2 fw-semibold small">Giao hàng / Hoàn tất</div>
+                        <div class="text-muted small">@(Model.TrangThai == "Đã hoàn tất" ? "Thành công" : "Đang chờ")</div>
+                    </div>
+                </div>
+            </div>
+
+            <hr />
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <h6 class="fw-bold">Thông tin khách hàng & Đơn</h6>
+                    <ul class="list-unstyled mb-0">
+                        <li><strong>Khách hàng:</strong> @Model.TenKhachHang (@Model.MaKhachHang)</li>
+                        <li><strong>Số điện thoại:</strong> @Model.SoDienThoai</li>
+                        <li><strong>Ngày đặt:</strong> @Model.NgayDat?.ToString("dd/MM/yyyy HH:mm")</li>
+                        <li><strong>Nhân viên tiếp nhận:</strong> @Model.MaNV</li>
+                    </ul>
+                </div>
+                <div class="col-md-6 mb-3 text-md-end">
+                    <h6 class="fw-bold">Trạng thái hiện tại</h6>
+                    @if (Model.TrangThai == "Đã hoàn tất")
+                    {
+                        <div class="alert alert-success d-inline-block text-start mb-0">
+                            <strong><i class="bi bi-check-circle me-1"></i> Đơn hàng đã hoàn tất!</strong><br />
+                            Hàng đã được giao hoặc quý khách đã nhận đầy đủ tại quầy.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning d-inline-block text-start mb-0">
+                            <strong><i class="bi bi-clock me-1"></i> Đơn hàng đang được xử lý!</strong><br />
+                            Nhân viên siêu thị đang đóng gói và kiểm kê xuất kho.
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <h6 class="fw-bold mt-3 mb-2">Chi tiết các mặt hàng trong đơn:</h6>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Mã SP</th>
+                            <th>Tên Hàng Hóa</th>
+                            <th class="text-center">ĐVT</th>
+                            <th class="text-center">Số Lượng</th>
+                            <th class="text-end">Đơn Giá</th>
+                            <th class="text-end">Thành Tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int idx = 1; }
+                        @foreach (var item in Model.ChiTiet)
+                        {
+                            <tr>
+                                <td>@(idx++)</td>
+                                <td><code>@item.MaSP</code></td>
+                                <td><strong>@item.TenSP</strong></td>
+                                <td class="text-center">@item.DonViTinh</td>
+                                <td class="text-center"><span class="badge bg-secondary">@item.SoLuong</span></td>
+                                <td class="text-end">@item.DonGia.ToString("N0") đ</td>
+                                <td class="text-end fw-bold">@item.ThanhTien.ToString("N0") đ</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="6" class="text-end fw-bold fs-6">TỔNG CỘNG TIỀN ĐƠN HÀNG:</td>
+                            <td class="text-end fw-bold fs-5 text-danger">@Model.TongTien.ToString("N0") đ</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+}

@@ -1,0 +1,175 @@
+@{
+    ViewData["Title"] = "UC7: Quản Lý Nhập Hàng";
+    var nccs = ViewBag.NhaCungCaps as List<EMarket.Models.NhaCungCap>;
+    var khos = ViewBag.Khos as List<EMarket.Models.Kho>;
+    var sanPhams = ViewBag.SanPhams as List<EMarket.Models.SanPham>;
+    var recentImports = ViewBag.RecentImports as List<EMarket.Models.PhieuNhap>;
+    var success = ViewBag.Success as string;
+    var error = ViewBag.Error as string;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <span class="badge bg-warning text-dark mb-1">Use Case 7 (Mục 1.4.5 f)</span>
+        <h3 class="fw-bold mb-0">Quản Lý Nhập Hàng Vào Kho</h3>
+        <p class="text-muted small">Nhân viên kho tiếp nhận hàng, lập phiếu nhập, tự động cộng dồn số lượng tồn kho theo từng kho lưu trữ.</p>
+    </div>
+    <div>
+        <span class="badge bg-light text-dark border p-2">
+            <i class="bi bi-person-gear text-warning me-1"></i> Thủ kho: <strong>Văn Trần Tuấn Khải (NV03)</strong>
+        </span>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(success))
+{
+    <div class="alert alert-success d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-check-circle-fill fs-3 me-3"></i>
+        <div>
+            <h5 class="alert-heading fw-bold mb-1">Nhập Hàng Thành Công!</h5>
+            <div>@success</div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+        <i class="bi bi-exclamation-triangle-fill fs-3 me-3"></i>
+        <div>
+            <h5 class="alert-heading fw-bold mb-1">Thông tin nhập hàng không hợp lệ</h5>
+            <div>@error</div>
+        </div>
+    </div>
+}
+
+<div class="row">
+    <!-- Form Lập Phiếu Nhập Hàng -->
+    <div class="col-md-7">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-file-earmark-plus me-2 text-warning"></i>Lập Phiếu Nhập Hàng Mới</h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="post" asp-action="TaoPhieuNhap">
+                    <div class="row">
+                        <!-- Chọn nhà cung cấp -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">1. Nhà Cung Cấp giao hàng: <span class="text-danger">*</span></label>
+                            <select name="maNCC" class="form-select" required>
+                                <option value="">-- Chọn nhà cung cấp --</option>
+                                @if (nccs != null)
+                                {
+                                    foreach (var n in nccs)
+                                    {
+                                        <option value="@n.MaNCC">@n.TenNCC</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <!-- Chọn kho nhập -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">2. Nhập vào Kho lưu trữ: <span class="text-danger">*</span></label>
+                            <select name="maKho" class="form-select" required>
+                                <option value="">-- Chọn kho nhập hàng --</option>
+                                @if (khos != null)
+                                {
+                                    foreach (var k in khos)
+                                    {
+                                        <option value="@k.MaKho">@k.TenKho</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Chọn sản phẩm -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">3. Hàng Hóa tiếp nhận: <span class="text-danger">*</span></label>
+                        <select name="maSP" id="selectNhapSP" class="form-select" required onchange="calcImportTotal()">
+                            <option value="" data-unit="">-- Chọn sản phẩm nhập lô --</option>
+                            @if (sanPhams != null)
+                            {
+                                foreach (var sp in sanPhams)
+                                {
+                                    <option value="@sp.MaSP" data-unit="@sp.DonViTinh">
+                                        @sp.MaSP - @sp.TenSP (ĐVT: @sp.DonViTinh - Tồn hiện tại: @sp.SoLuongTon)
+                                    </option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div class="row">
+                        <!-- Số lượng nhập -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">4. Số lượng nhập thực tế: <span class="text-danger">*</span></label>
+                            <input type="number" id="soLuongNhap" name="soLuong" class="form-control" min="1" value="10" required oninput="calcImportTotal()" />
+                        </div>
+
+                        <!-- Đơn giá nhập -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">5. Đơn giá nhập (VNĐ / ĐVT): <span class="text-danger">*</span></label>
+                            <input type="number" id="donGiaNhap" name="donGiaNhap" class="form-control" min="1000" step="500" value="25000" required oninput="calcImportTotal()" />
+                        </div>
+                    </div>
+
+                    <!-- Tóm tắt phiếu nhập -->
+                    <div class="p-3 bg-light rounded-3 mb-4 border">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fs-6 fw-bold">Tổng giá trị thanh toán cho NCC:</span>
+                            <span class="fs-4 fw-bold text-warning-emphasis" id="totalImportPreview">250.000 đ</span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-warning text-dark btn-lg w-100 fw-bold">
+                        <i class="bi bi-box-arrow-in-down me-1"></i> Xác Nhận Nhập Kho & Cập Nhật Tồn
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Danh sách phiếu nhập gần đây -->
+    <div class="col-md-5">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history me-1 text-warning"></i>Phiếu Nhập Kho Gần Đây</h6>
+                <span class="badge bg-secondary">Mới nhất</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    @if (recentImports != null)
+                    {
+                        foreach (var pn in recentImports)
+                        {
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between">
+                                    <strong class="text-dark">@pn.MaPhieuNhap</strong>
+                                    <span class="text-danger fw-bold">@pn.TongTien.ToString("N0") đ</span>
+                                </div>
+                                <div class="small text-muted">NCC: @pn.TenNCC</div>
+                                <div class="small text-muted">Kho: @pn.TenKho | @pn.NgayNhap?.ToString("dd/MM/yyyy HH:mm")</div>
+                                <div class="mt-1">
+                                    <span class="badge bg-light text-dark border">Thủ kho: @pn.MaNV</span>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function calcImportTotal() {
+        const qty = parseInt(document.getElementById("soLuongNhap").value) || 0;
+        const price = parseFloat(document.getElementById("donGiaNhap").value) || 0;
+        const total = qty * price;
+        document.getElementById("totalImportPreview").innerText = total.toLocaleString('vi-VN') + " đ";
+    }
+</script>
+}
