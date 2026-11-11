@@ -18,6 +18,7 @@ namespace EMarket.Services
         public List<ChiTietPhieuNhap> ChiTietPhieuNhaps { get; set; } = new();
         public List<TonKho> TonKhos { get; set; } = new();
         public List<CongNo> CongNos { get; set; } = new();
+        public List<Voucher> Vouchers { get; set; } = new();
 
         public DataStore()
         {

@@ -22,14 +22,931 @@ public class SqlDataStore
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync();
         await EnsureAccountTableAsync(connection);
+        await EnsureOrderCheckoutColumnsAsync(connection);
+        await EnsureDebtOrderReferenceColumnAsync(connection);
+        await EnsureVoucherTableAsync(connection);
+        await EnsureCartTableAsync(connection);
 
         if (!await HasBusinessRowsAsync(connection))
         {
             await SeedDemoDataAsync(connection, store);
         }
 
+        await ReconcileOrderTotalsAsync(connection);
         await MigrateLegacyEmployeePasswordsAsync(connection);
         await LoadAsync(connection, store);
+    }
+
+    private static async Task EnsureOrderCheckoutColumnsAsync(SqlConnection connection)
+    {
+        await using var command = new SqlCommand(
+            """
+            IF COL_LENGTH(N'dbo.DonHang', N'TenNguoiNhan') IS NULL
+                ALTER TABLE dbo.DonHang ADD TenNguoiNhan NVARCHAR(100) NULL;
+            IF COL_LENGTH(N'dbo.DonHang', N'SoDienThoaiGiaoHang') IS NULL
+                ALTER TABLE dbo.DonHang ADD SoDienThoaiGiaoHang VARCHAR(20) NULL;
+            IF COL_LENGTH(N'dbo.DonHang', N'DiaChiGiaoHang') IS NULL
+                ALTER TABLE dbo.DonHang ADD DiaChiGiaoHang NVARCHAR(255) NULL;
+            IF COL_LENGTH(N'dbo.DonHang', N'PhuongThucThanhToan') IS NULL
+                ALTER TABLE dbo.DonHang ADD PhuongThucThanhToan NVARCHAR(50) NULL;
+            """, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task EnsureDebtOrderReferenceColumnAsync(SqlConnection connection)
+    {
+        await using var command = new SqlCommand(
+            """
+            IF COL_LENGTH(N'dbo.CongNo', N'MaDonHang') IS NULL
+                ALTER TABLE dbo.CongNo ADD MaDonHang VARCHAR(50) NULL;
+            """, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task EnsureVoucherTableAsync(SqlConnection connection)
+    {
+        await using var command = new SqlCommand(
+            """
+            IF COL_LENGTH(N'dbo.DonHang', N'MaVoucher') IS NULL
+                ALTER TABLE dbo.DonHang ADD MaVoucher VARCHAR(50) NULL;
+            IF COL_LENGTH(N'dbo.DonHang', N'TienGiamGia') IS NULL
+                ALTER TABLE dbo.DonHang ADD TienGiamGia DECIMAL(18, 2) NOT NULL
+                    CONSTRAINT DF_DonHang_TienGiamGia DEFAULT (0);
+            IF OBJECT_ID(N'dbo.Voucher', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.Voucher
+                (
+                    MaVoucher VARCHAR(50) NOT NULL PRIMARY KEY,
+                    MaKhachHang VARCHAR(50) NOT NULL,
+                    GiaTri DECIMAL(18, 2) NOT NULL,
+                    NgayTao DATE NOT NULL,
+                    NgayHetHan DATE NOT NULL,
+                    MaDonHangSuDung VARCHAR(50) NULL,
+                    CONSTRAINT FK_Voucher_KhachHang FOREIGN KEY (MaKhachHang)
+                        REFERENCES dbo.KhachHang(MaKhachHang),
+                    CONSTRAINT CK_Voucher_GiaTri CHECK (GiaTri > 0)
+                );
+            END;
+            """, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task EnsureCartTableAsync(SqlConnection connection)
+    {
+        await using var command = new SqlCommand(
+            """
+            IF OBJECT_ID(N'dbo.GioHang', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.GioHang
+                (
+                    MaPhien VARCHAR(50) NOT NULL,
+                    MaSP VARCHAR(50) NOT NULL,
+                    SoLuong INT NOT NULL,
+                    CapNhatLuc DATETIME2 NOT NULL CONSTRAINT DF_GioHang_CapNhatLuc DEFAULT SYSUTCDATETIME(),
+                    CONSTRAINT PK_GioHang PRIMARY KEY (MaPhien, MaSP),
+                    CONSTRAINT FK_GioHang_SanPham FOREIGN KEY (MaSP) REFERENCES dbo.SanPham(MaSP),
+                    CONSTRAINT CK_GioHang_SoLuong CHECK (SoLuong BETWEEN 1 AND 9999)
+                );
+            END;
+            """, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task ReconcileOrderTotalsAsync(SqlConnection connection)
+    {
+        await using var command = new SqlCommand(
+            """
+            UPDATE dh
+            SET TongTien = totals.TongTienHang - COALESCE(dh.TienGiamGia, 0)
+            FROM dbo.DonHang dh
+            CROSS APPLY (
+                SELECT SUM(ct.ThanhTien) AS TongTienHang
+                FROM dbo.ChiTietDonHang ct
+                WHERE ct.MaDonHang = dh.MaDonHang
+            ) totals
+            WHERE totals.TongTienHang IS NOT NULL
+              AND dh.TongTien <> totals.TongTienHang - COALESCE(dh.TienGiamGia, 0);
+            """, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task<string?> SaveCustomerOrderAsync(DonHang order, string cartSessionId)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        foreach (var line in order.ChiTiet)
+        {
+            await using var productCommand = new SqlCommand(
+                "SELECT GiaBan FROM dbo.SanPham WITH (UPDLOCK, HOLDLOCK) WHERE MaSP = @MaSP;",
+                connection, transaction);
+            productCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+            var price = await productCommand.ExecuteScalarAsync();
+            if (price == null || price == DBNull.Value)
+            {
+                await transaction.RollbackAsync();
+                return $"Sản phẩm '{line.MaSP}' không còn tồn tại. Vui lòng cập nhật giỏ hàng.";
+            }
+
+            line.DonGia = Convert.ToDecimal(price);
+            await using var stockTotalCommand = new SqlCommand(
+                """
+                SELECT COALESCE(SUM(SoLuongTon), 0)
+                FROM dbo.TonKho WITH (UPDLOCK, HOLDLOCK)
+                WHERE MaSP = @MaSP;
+                """, connection, transaction);
+            stockTotalCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+            var availableStock = Convert.ToInt32(await stockTotalCommand.ExecuteScalarAsync());
+            if (line.SoLuong > availableStock)
+            {
+                await transaction.RollbackAsync();
+                return $"Sản phẩm '{line.TenSP}' chỉ còn {availableStock} trong kho. Vui lòng điều chỉnh giỏ hàng.";
+            }
+            line.ThanhTien = line.SoLuong * line.DonGia;
+        }
+
+        order.TongTien = order.ChiTiet.Sum(line => line.ThanhTien);
+        order.TienGiamGia = 0;
+        if (!string.IsNullOrWhiteSpace(order.MaVoucher))
+        {
+            await using var voucherCommand = new SqlCommand(
+                """
+                SELECT GiaTri
+                FROM dbo.Voucher WITH (UPDLOCK, HOLDLOCK)
+                WHERE MaVoucher = @MaVoucher
+                  AND MaKhachHang = @MaKhachHang
+                  AND MaDonHangSuDung IS NULL
+                  AND NgayHetHan >= @Ngay;
+                """, connection, transaction);
+            voucherCommand.Parameters.Add("@MaVoucher", SqlDbType.VarChar, 50).Value = order.MaVoucher.Trim();
+            voucherCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = order.MaKhachHang!;
+            voucherCommand.Parameters.Add("@Ngay", SqlDbType.Date).Value = DateTime.Today;
+            var voucherValue = await voucherCommand.ExecuteScalarAsync();
+            if (voucherValue == null || voucherValue == DBNull.Value)
+            {
+                await transaction.RollbackAsync();
+                return "Voucher không hợp lệ, đã dùng, hết hạn hoặc không thuộc tài khoản của bạn.";
+            }
+
+            order.TienGiamGia = Math.Min(Convert.ToDecimal(voucherValue), order.TongTien);
+            order.TongTien -= order.TienGiamGia;
+        }
+
+        await using (var orderCommand = new SqlCommand(
+            """
+            INSERT INTO dbo.DonHang
+                (MaDonHang, MaKhachHang, MaNV, NgayDat, TrangThai, TongTien,
+                 TenNguoiNhan, SoDienThoaiGiaoHang, DiaChiGiaoHang, PhuongThucThanhToan,
+                 MaVoucher, TienGiamGia)
+            VALUES
+                (@MaDonHang, @MaKhachHang, @MaNV, @NgayDat, @TrangThai, @TongTien,
+                 @TenNguoiNhan, @SoDienThoaiGiaoHang, @DiaChiGiaoHang, @PhuongThucThanhToan,
+                 @MaVoucher, @TienGiamGia);
+            """, connection, transaction))
+        {
+            orderCommand.Parameters.Add("@MaDonHang", SqlDbType.VarChar, 50).Value = order.MaDonHang;
+            orderCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = order.MaKhachHang!;
+            orderCommand.Parameters.Add("@MaNV", SqlDbType.VarChar, 50).Value = (object?)order.MaNV ?? DBNull.Value;
+            orderCommand.Parameters.Add("@NgayDat", SqlDbType.DateTime).Value = order.NgayDat!.Value;
+            orderCommand.Parameters.Add("@TrangThai", SqlDbType.NVarChar, 50).Value = order.TrangThai!;
+            var totalParameter = orderCommand.Parameters.Add("@TongTien", SqlDbType.Decimal);
+            totalParameter.Precision = 18;
+            totalParameter.Scale = 2;
+            totalParameter.Value = order.TongTien;
+            orderCommand.Parameters.Add("@TenNguoiNhan", SqlDbType.NVarChar, 100).Value = order.TenNguoiNhan!;
+            orderCommand.Parameters.Add("@SoDienThoaiGiaoHang", SqlDbType.VarChar, 20).Value = order.SoDienThoaiGiaoHang!;
+            orderCommand.Parameters.Add("@DiaChiGiaoHang", SqlDbType.NVarChar, 255).Value = order.DiaChiGiaoHang!;
+            orderCommand.Parameters.Add("@PhuongThucThanhToan", SqlDbType.NVarChar, 50).Value = order.PhuongThucThanhToan!;
+            orderCommand.Parameters.Add("@MaVoucher", SqlDbType.VarChar, 50).Value =
+                string.IsNullOrWhiteSpace(order.MaVoucher) ? DBNull.Value : order.MaVoucher.Trim();
+            var discountParameter = orderCommand.Parameters.Add("@TienGiamGia", SqlDbType.Decimal);
+            discountParameter.Precision = 18;
+            discountParameter.Scale = 2;
+            discountParameter.Value = order.TienGiamGia;
+            await orderCommand.ExecuteNonQueryAsync();
+        }
+
+        foreach (var line in order.ChiTiet)
+        {
+            await using (var detailCommand = new SqlCommand(
+                """
+                INSERT INTO dbo.ChiTietDonHang (MaDonHang, MaSP, SoLuong, DonGia, ThanhTien)
+                VALUES (@MaDonHang, @MaSP, @SoLuong, @DonGia, @ThanhTien);
+                """, connection, transaction))
+            {
+                detailCommand.Parameters.Add("@MaDonHang", SqlDbType.VarChar, 50).Value = order.MaDonHang;
+                detailCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+                detailCommand.Parameters.Add("@SoLuong", SqlDbType.Int).Value = line.SoLuong;
+                var priceParameter = detailCommand.Parameters.Add("@DonGia", SqlDbType.Decimal);
+                priceParameter.Precision = 18;
+                priceParameter.Scale = 2;
+                priceParameter.Value = line.DonGia;
+                var lineTotalParameter = detailCommand.Parameters.Add("@ThanhTien", SqlDbType.Decimal);
+                lineTotalParameter.Precision = 18;
+                lineTotalParameter.Scale = 2;
+                lineTotalParameter.Value = line.ThanhTien;
+                await detailCommand.ExecuteNonQueryAsync();
+            }
+
+            var remainingQuantity = line.SoLuong;
+            var warehouseStocks = new List<(string WarehouseId, int Quantity)>();
+            await using (var stockCommand = new SqlCommand(
+                """
+                SELECT MaKho, SoLuongTon
+                FROM dbo.TonKho WITH (UPDLOCK, HOLDLOCK)
+                WHERE MaSP = @MaSP AND SoLuongTon > 0
+                ORDER BY MaKho;
+                """, connection, transaction))
+            {
+                stockCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+                await using var reader = await stockCommand.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    warehouseStocks.Add((reader.GetString(0), reader.GetInt32(1)));
+                }
+            }
+
+            foreach (var stock in warehouseStocks)
+            {
+                var deduction = Math.Min(remainingQuantity, stock.Quantity);
+                await using var updateStock = new SqlCommand(
+                    """
+                    UPDATE dbo.TonKho
+                    SET SoLuongTon = SoLuongTon - @SoLuong, SoLuongDaBan = SoLuongDaBan + @SoLuong
+                    WHERE MaKho = @MaKho AND MaSP = @MaSP AND SoLuongTon >= @SoLuong;
+                    """, connection, transaction);
+                updateStock.Parameters.Add("@SoLuong", SqlDbType.Int).Value = deduction;
+                updateStock.Parameters.Add("@MaKho", SqlDbType.VarChar, 50).Value = stock.WarehouseId;
+                updateStock.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+                if (await updateStock.ExecuteNonQueryAsync() != 1)
+                {
+                    await transaction.RollbackAsync();
+                    return $"Kho vừa thay đổi số lượng của '{line.TenSP}'. Vui lòng kiểm tra lại giỏ hàng.";
+                }
+
+                remainingQuantity -= deduction;
+                if (remainingQuantity == 0)
+                {
+                    break;
+                }
+            }
+
+            if (remainingQuantity > 0)
+            {
+                await transaction.RollbackAsync();
+                return $"Kho không đủ số lượng '{line.TenSP}'. Vui lòng điều chỉnh giỏ hàng.";
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(order.MaVoucher))
+        {
+            await using var useVoucherCommand = new SqlCommand(
+                """
+                UPDATE dbo.Voucher
+                SET MaDonHangSuDung = @MaDonHang
+                WHERE MaVoucher = @MaVoucher
+                  AND MaKhachHang = @MaKhachHang
+                  AND MaDonHangSuDung IS NULL
+                  AND NgayHetHan >= @Ngay;
+                """, connection, transaction);
+            useVoucherCommand.Parameters.Add("@MaDonHang", SqlDbType.VarChar, 50).Value = order.MaDonHang;
+            useVoucherCommand.Parameters.Add("@MaVoucher", SqlDbType.VarChar, 50).Value = order.MaVoucher.Trim();
+            useVoucherCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = order.MaKhachHang!;
+            useVoucherCommand.Parameters.Add("@Ngay", SqlDbType.Date).Value = DateTime.Today;
+            if (await useVoucherCommand.ExecuteNonQueryAsync() != 1)
+            {
+                await transaction.RollbackAsync();
+                return "Voucher vừa được sử dụng hoặc không còn hợp lệ. Vui lòng thử lại.";
+            }
+        }
+
+        if (order.PhuongThucThanhToan == "Ghi nợ")
+        {
+            await using var debtCommand = new SqlCommand(
+                """
+                INSERT INTO dbo.CongNo
+                    (MaCongNo, MaNV, MaKhachHang, MaDonHang, LoaiCongNo, NgayPhatSinh,
+                     SoTienNo, HanThanhToan, TrangThai)
+                VALUES
+                    (@MaCongNo, @MaNV, @MaKhachHang, @MaDonHang, N'Phải thu', @NgayPhatSinh,
+                     @SoTienNo, @HanThanhToan, N'Chưa trả');
+                """, connection, transaction);
+            debtCommand.Parameters.Add("@MaCongNo", SqlDbType.VarChar, 50).Value = "CN-" + order.MaDonHang;
+            debtCommand.Parameters.Add("@MaNV", SqlDbType.VarChar, 50).Value = (object?)order.MaNVQuanLyCongNo ?? DBNull.Value;
+            debtCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = order.MaKhachHang!;
+            debtCommand.Parameters.Add("@MaDonHang", SqlDbType.VarChar, 50).Value = order.MaDonHang;
+            debtCommand.Parameters.Add("@NgayPhatSinh", SqlDbType.Date).Value = order.NgayDat!.Value.Date;
+            var debtAmount = debtCommand.Parameters.Add("@SoTienNo", SqlDbType.Decimal);
+            debtAmount.Precision = 18;
+            debtAmount.Scale = 2;
+            debtAmount.Value = order.TongTien;
+            debtCommand.Parameters.Add("@HanThanhToan", SqlDbType.Date).Value = order.NgayDat.Value.Date.AddDays(30);
+            await debtCommand.ExecuteNonQueryAsync();
+        }
+
+        var pointsEarned = (int)(order.TongTien / 10000);
+        await using (var pointsCommand = new SqlCommand(
+            """
+            UPDATE dbo.TheThanhVien
+            SET DiemTichLuy = DiemTichLuy + @Diem
+            WHERE MaKhachHang = @MaKhachHang;
+            """, connection, transaction))
+        {
+            pointsCommand.Parameters.Add("@Diem", SqlDbType.Int).Value = pointsEarned;
+            pointsCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = order.MaKhachHang!;
+            await pointsCommand.ExecuteNonQueryAsync();
+        }
+
+        await using (var clearCartCommand = new SqlCommand(
+            "DELETE FROM dbo.GioHang WHERE MaPhien = @MaPhien;",
+            connection, transaction))
+        {
+            clearCartCommand.Parameters.Add("@MaPhien", SqlDbType.VarChar, 50).Value = cartSessionId;
+            await clearCartCommand.ExecuteNonQueryAsync();
+        }
+
+        await transaction.CommitAsync();
+        return null;
+    }
+
+    public async Task<Dictionary<string, int>> GetCartAsync(string cartSessionId)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(
+            "SELECT MaSP, SoLuong FROM dbo.GioHang WHERE MaPhien = @MaPhien;",
+            connection);
+        command.Parameters.Add("@MaPhien", SqlDbType.VarChar, 50).Value = cartSessionId;
+        var items = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            items.Add(reader.GetString(0), reader.GetInt32(1));
+        }
+
+        return items;
+    }
+
+    public async Task<string?> GetCustomerIdForAccountAsync(string userName)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(
+            """
+            SELECT MaKhachHang
+            FROM dbo.TaiKhoan
+            WHERE TenDangNhap = @TenDangNhap AND VaiTro = 'Customer';
+            """, connection);
+        command.Parameters.Add("@TenDangNhap", SqlDbType.VarChar, 50).Value = userName;
+        var result = await command.ExecuteScalarAsync();
+        return result == null || result == DBNull.Value ? null : Convert.ToString(result);
+    }
+
+    public async Task<KhachHang?> GetCustomerAsync(string customerId)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(
+            """
+            SELECT kh.MaKhachHang, kh.MaLoai, kh.MaNV, kh.HoTen, kh.SoDienThoai, kh.Email, kh.DiaChi,
+                   lk.TenLoai, COALESCE(tt.DiemTichLuy, 0) AS DiemTichLuy
+            FROM dbo.KhachHang kh
+            LEFT JOIN dbo.LoaiKhachHang lk ON lk.MaLoai = kh.MaLoai
+            LEFT JOIN dbo.TheThanhVien tt ON tt.MaKhachHang = kh.MaKhachHang
+            WHERE kh.MaKhachHang = @MaKhachHang;
+            """, connection);
+        command.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = customerId;
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            return null;
+        }
+
+        return new KhachHang
+        {
+            MaKhachHang = Text(reader, "MaKhachHang") ?? string.Empty,
+            MaLoai = Text(reader, "MaLoai"),
+            MaNV = Text(reader, "MaNV"),
+            HoTen = Text(reader, "HoTen") ?? string.Empty,
+            SoDienThoai = Text(reader, "SoDienThoai"),
+            Email = Text(reader, "Email"),
+            DiaChi = Text(reader, "DiaChi"),
+            TenLoai = Text(reader, "TenLoai"),
+            DiemTichLuy = Number(reader, "DiemTichLuy")
+        };
+    }
+
+    public async Task<List<DonHang>> GetCustomerOrdersAsync(string customerId)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(
+            """
+            SELECT dh.MaDonHang, dh.MaKhachHang, dh.MaNV, dh.NgayDat, dh.TrangThai, dh.TongTien,
+                   COALESCE(dh.TenNguoiNhan, kh.HoTen) AS TenKhachHang,
+                   dh.TenNguoiNhan, COALESCE(dh.SoDienThoaiGiaoHang, kh.SoDienThoai) AS SoDienThoai,
+                   dh.SoDienThoaiGiaoHang, dh.DiaChiGiaoHang, dh.PhuongThucThanhToan,
+                   dh.MaVoucher, dh.TienGiamGia,
+                   ct.MaSP, ct.SoLuong, ct.DonGia, ct.ThanhTien, sp.TenSP, sp.DonViTinh
+            FROM dbo.DonHang dh
+            LEFT JOIN dbo.KhachHang kh ON kh.MaKhachHang = dh.MaKhachHang
+            LEFT JOIN dbo.ChiTietDonHang ct ON ct.MaDonHang = dh.MaDonHang
+            LEFT JOIN dbo.SanPham sp ON sp.MaSP = ct.MaSP
+            WHERE dh.MaKhachHang = @MaKhachHang
+            ORDER BY dh.NgayDat DESC, dh.MaDonHang, ct.MaSP;
+            """, connection);
+        command.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = customerId;
+        var ordersById = new Dictionary<string, DonHang>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var orderId = Text(reader, "MaDonHang") ?? string.Empty;
+            if (!ordersById.TryGetValue(orderId, out var order))
+            {
+                order = new DonHang
+                {
+                    MaDonHang = orderId,
+                    MaKhachHang = Text(reader, "MaKhachHang"),
+                    MaNV = Text(reader, "MaNV"),
+                    NgayDat = Date(reader, "NgayDat"),
+                    TrangThai = Text(reader, "TrangThai"),
+                    TongTien = Amount(reader, "TongTien"),
+                    TenKhachHang = Text(reader, "TenKhachHang"),
+                    TenNguoiNhan = Text(reader, "TenNguoiNhan"),
+                    SoDienThoai = Text(reader, "SoDienThoai"),
+                    SoDienThoaiGiaoHang = Text(reader, "SoDienThoaiGiaoHang"),
+                    DiaChiGiaoHang = Text(reader, "DiaChiGiaoHang"),
+                    PhuongThucThanhToan = Text(reader, "PhuongThucThanhToan"),
+                    MaVoucher = Text(reader, "MaVoucher"),
+                    TienGiamGia = Amount(reader, "TienGiamGia")
+                };
+                ordersById.Add(orderId, order);
+            }
+
+            var productId = Text(reader, "MaSP");
+            if (productId != null)
+            {
+                order.ChiTiet.Add(new ChiTietDonHang
+                {
+                    MaDonHang = orderId,
+                    MaSP = productId,
+                    SoLuong = Number(reader, "SoLuong"),
+                    DonGia = Amount(reader, "DonGia"),
+                    ThanhTien = Amount(reader, "ThanhTien"),
+                    TenSP = Text(reader, "TenSP"),
+                    DonViTinh = Text(reader, "DonViTinh")
+                });
+            }
+        }
+
+        return ordersById.Values.ToList();
+    }
+
+    public async Task<List<Voucher>> GetCustomerVouchersAsync(string customerId)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        return await ReadAsync(connection,
+            """
+            SELECT MaVoucher, MaKhachHang, GiaTri, NgayTao, NgayHetHan, MaDonHangSuDung
+            FROM dbo.Voucher
+            WHERE MaKhachHang = @MaKhachHang
+            ORDER BY NgayTao DESC;
+            """, command => command.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = customerId,
+            reader => new Voucher
+            {
+                MaVoucher = Text(reader, "MaVoucher") ?? string.Empty,
+                MaKhachHang = Text(reader, "MaKhachHang") ?? string.Empty,
+                GiaTri = Amount(reader, "GiaTri"),
+                NgayTao = Date(reader, "NgayTao") ?? DateTime.MinValue,
+                NgayHetHan = Date(reader, "NgayHetHan") ?? DateTime.MinValue,
+                MaDonHangSuDung = Text(reader, "MaDonHangSuDung")
+            });
+    }
+
+    public async Task<TheThanhVien?> GetMemberCardAsync(string customerId)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(
+            """
+            SELECT MaThe, MaKhachHang, NgayLap, DiemTichLuy
+            FROM dbo.TheThanhVien
+            WHERE MaKhachHang = @MaKhachHang;
+            """, connection);
+        command.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = customerId;
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            return null;
+        }
+
+        return new TheThanhVien
+        {
+            MaThe = Text(reader, "MaThe") ?? string.Empty,
+            MaKhachHang = Text(reader, "MaKhachHang"),
+            NgayLap = Date(reader, "NgayLap"),
+            DiemTichLuy = Number(reader, "DiemTichLuy")
+        };
+    }
+
+    public async Task SaveCartAsync(string cartSessionId, IReadOnlyDictionary<string, int> items)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        await using (var lockCommand = new SqlCommand(
+            "SELECT MaSP FROM dbo.GioHang WITH (UPDLOCK, HOLDLOCK) WHERE MaPhien = @MaPhien;",
+            connection, transaction))
+        {
+            lockCommand.Parameters.Add("@MaPhien", SqlDbType.VarChar, 50).Value = cartSessionId;
+            await lockCommand.ExecuteNonQueryAsync();
+        }
+
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Key) || item.Key.Length > 50 || item.Value is < 1 or > 9999)
+            {
+                await transaction.RollbackAsync();
+                throw new ArgumentException("Giỏ hàng chứa mã sản phẩm hoặc số lượng không hợp lệ.", nameof(items));
+            }
+
+            await using var productCommand = new SqlCommand(
+                "SELECT 1 FROM dbo.SanPham WHERE MaSP = @MaSP;",
+                connection, transaction);
+            productCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = item.Key;
+            if (await productCommand.ExecuteScalarAsync() == null)
+            {
+                await transaction.RollbackAsync();
+                throw new ArgumentException($"Sản phẩm '{item.Key}' không tồn tại.", nameof(items));
+            }
+        }
+
+        await using (var clearCommand = new SqlCommand(
+            "DELETE FROM dbo.GioHang WHERE MaPhien = @MaPhien;",
+            connection, transaction))
+        {
+            clearCommand.Parameters.Add("@MaPhien", SqlDbType.VarChar, 50).Value = cartSessionId;
+            await clearCommand.ExecuteNonQueryAsync();
+        }
+
+        foreach (var item in items)
+        {
+            await using var insertCommand = new SqlCommand(
+                "INSERT INTO dbo.GioHang (MaPhien, MaSP, SoLuong) VALUES (@MaPhien, @MaSP, @SoLuong);",
+                connection, transaction);
+            insertCommand.Parameters.Add("@MaPhien", SqlDbType.VarChar, 50).Value = cartSessionId;
+            insertCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = item.Key;
+            insertCommand.Parameters.Add("@SoLuong", SqlDbType.Int).Value = item.Value;
+            await insertCommand.ExecuteNonQueryAsync();
+        }
+
+        await transaction.CommitAsync();
+    }
+
+    public async Task<int?> RedeemVoucherAsync(string customerId, int points, Voucher voucher)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        int remainingPoints;
+        await using (var pointsCommand = new SqlCommand(
+            """
+            UPDATE dbo.TheThanhVien
+            SET DiemTichLuy = DiemTichLuy - @Diem
+            OUTPUT INSERTED.DiemTichLuy
+            WHERE MaKhachHang = @MaKhachHang AND DiemTichLuy >= @Diem;
+            """, connection, transaction))
+        {
+            pointsCommand.Parameters.Add("@Diem", SqlDbType.Int).Value = points;
+            pointsCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = customerId;
+            var result = await pointsCommand.ExecuteScalarAsync();
+            if (result == null || result == DBNull.Value)
+            {
+                await transaction.RollbackAsync();
+                return null;
+            }
+
+            remainingPoints = Convert.ToInt32(result);
+        }
+
+        await using (var voucherCommand = new SqlCommand(
+            """
+            INSERT INTO dbo.Voucher (MaVoucher, MaKhachHang, GiaTri, NgayTao, NgayHetHan)
+            VALUES (@MaVoucher, @MaKhachHang, @GiaTri, @NgayTao, @NgayHetHan);
+            """, connection, transaction))
+        {
+            voucherCommand.Parameters.Add("@MaVoucher", SqlDbType.VarChar, 50).Value = voucher.MaVoucher;
+            voucherCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = customerId;
+            var valueParameter = voucherCommand.Parameters.Add("@GiaTri", SqlDbType.Decimal);
+            valueParameter.Precision = 18;
+            valueParameter.Scale = 2;
+            valueParameter.Value = voucher.GiaTri;
+            voucherCommand.Parameters.Add("@NgayTao", SqlDbType.Date).Value = voucher.NgayTao;
+            voucherCommand.Parameters.Add("@NgayHetHan", SqlDbType.Date).Value = voucher.NgayHetHan;
+            await voucherCommand.ExecuteNonQueryAsync();
+        }
+
+        await transaction.CommitAsync();
+        return remainingPoints;
+    }
+
+    public async Task<(decimal Remaining, string Status)?> RecordDebtPaymentAsync(string debtId, decimal amount)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(
+            """
+            UPDATE dbo.CongNo
+            SET SoTienNo = SoTienNo - @SoTien,
+                TrangThai = CASE WHEN SoTienNo - @SoTien = 0 THEN N'Đã thanh toán' ELSE N'Chưa trả' END
+            OUTPUT INSERTED.SoTienNo, INSERTED.TrangThai
+            WHERE MaCongNo = @MaCongNo AND SoTienNo > 0 AND SoTienNo >= @SoTien;
+            """, connection);
+        command.Parameters.Add("@MaCongNo", SqlDbType.VarChar, 50).Value = debtId;
+        var amountParameter = command.Parameters.Add("@SoTien", SqlDbType.Decimal);
+        amountParameter.Precision = 18;
+        amountParameter.Scale = 2;
+        amountParameter.Value = amount;
+
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            return null;
+        }
+
+        return (reader.GetDecimal(0), reader.GetString(1));
+    }
+
+    public async Task<bool> UpdateOrderStatusAsync(string orderId, string currentStatus, string nextStatus)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(
+            """
+            UPDATE dbo.DonHang
+            SET TrangThai = @TrangThai
+            WHERE MaDonHang = @MaDonHang
+              AND TrangThai = @TrangThaiHienTai;
+            """, connection);
+        command.Parameters.Add("@TrangThai", SqlDbType.NVarChar, 50).Value = nextStatus;
+        command.Parameters.Add("@MaDonHang", SqlDbType.VarChar, 50).Value = orderId;
+        command.Parameters.Add("@TrangThaiHienTai", SqlDbType.NVarChar, 50).Value = currentStatus;
+        return await command.ExecuteNonQueryAsync() == 1;
+    }
+
+    public async Task<string?> SavePosOrderAsync(DonHang order)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        foreach (var line in order.ChiTiet)
+        {
+            var remaining = line.SoLuong;
+            var stockRows = new List<(string WarehouseId, int Quantity)>();
+            await using (var stockCommand = new SqlCommand(
+                """
+                SELECT MaKho, SoLuongTon
+                FROM dbo.TonKho WITH (UPDLOCK, HOLDLOCK)
+                WHERE MaSP = @MaSP AND SoLuongTon > 0
+                ORDER BY MaKho;
+                """, connection, transaction))
+            {
+                stockCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+                await using var reader = await stockCommand.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    stockRows.Add((reader.GetString(0), reader.GetInt32(1)));
+                }
+            }
+
+            if (stockRows.Sum(row => row.Quantity) < line.SoLuong)
+            {
+                await transaction.RollbackAsync();
+                return $"Kho vừa thay đổi số lượng của '{line.TenSP}'. Vui lòng tải lại và lập hóa đơn lại.";
+            }
+
+            foreach (var stock in stockRows)
+            {
+                var deduction = Math.Min(remaining, stock.Quantity);
+                await using var updateStock = new SqlCommand(
+                    """
+                    UPDATE dbo.TonKho
+                    SET SoLuongTon = SoLuongTon - @SoLuong, SoLuongDaBan = SoLuongDaBan + @SoLuong
+                    WHERE MaKho = @MaKho AND MaSP = @MaSP AND SoLuongTon >= @SoLuong;
+                    """, connection, transaction);
+                updateStock.Parameters.Add("@SoLuong", SqlDbType.Int).Value = deduction;
+                updateStock.Parameters.Add("@MaKho", SqlDbType.VarChar, 50).Value = stock.WarehouseId;
+                updateStock.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+                if (await updateStock.ExecuteNonQueryAsync() != 1)
+                {
+                    await transaction.RollbackAsync();
+                    return $"Tồn kho của '{line.TenSP}' vừa thay đổi. Vui lòng thử lại.";
+                }
+
+                remaining -= deduction;
+                if (remaining == 0) break;
+            }
+        }
+
+        await using (var orderCommand = new SqlCommand(
+            """
+            INSERT INTO dbo.DonHang (MaDonHang, MaKhachHang, MaNV, NgayDat, TrangThai, TongTien)
+            VALUES (@MaDonHang, @MaKhachHang, @MaNV, @NgayDat, @TrangThai, @TongTien);
+            """, connection, transaction))
+        {
+            orderCommand.Parameters.Add("@MaDonHang", SqlDbType.VarChar, 50).Value = order.MaDonHang;
+            orderCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = order.MaKhachHang!;
+            orderCommand.Parameters.Add("@MaNV", SqlDbType.VarChar, 50).Value = order.MaNV!;
+            orderCommand.Parameters.Add("@NgayDat", SqlDbType.DateTime).Value = order.NgayDat!.Value;
+            orderCommand.Parameters.Add("@TrangThai", SqlDbType.NVarChar, 50).Value = order.TrangThai!;
+            var total = orderCommand.Parameters.Add("@TongTien", SqlDbType.Decimal);
+            total.Precision = 18;
+            total.Scale = 2;
+            total.Value = order.TongTien;
+            await orderCommand.ExecuteNonQueryAsync();
+        }
+
+        foreach (var line in order.ChiTiet)
+        {
+            await using var detailCommand = new SqlCommand(
+                """
+                INSERT INTO dbo.ChiTietDonHang (MaDonHang, MaSP, SoLuong, DonGia, ThanhTien)
+                VALUES (@MaDonHang, @MaSP, @SoLuong, @DonGia, @ThanhTien);
+                """, connection, transaction);
+            detailCommand.Parameters.Add("@MaDonHang", SqlDbType.VarChar, 50).Value = order.MaDonHang;
+            detailCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+            detailCommand.Parameters.Add("@SoLuong", SqlDbType.Int).Value = line.SoLuong;
+            var price = detailCommand.Parameters.Add("@DonGia", SqlDbType.Decimal);
+            price.Precision = 18;
+            price.Scale = 2;
+            price.Value = line.DonGia;
+            var lineTotal = detailCommand.Parameters.Add("@ThanhTien", SqlDbType.Decimal);
+            lineTotal.Precision = 18;
+            lineTotal.Scale = 2;
+            lineTotal.Value = line.ThanhTien;
+            await detailCommand.ExecuteNonQueryAsync();
+        }
+
+        var points = (int)(order.TongTien / 10000);
+        await using (var pointsCommand = new SqlCommand(
+            """
+            UPDATE dbo.TheThanhVien
+            SET DiemTichLuy = DiemTichLuy + @Diem
+            WHERE MaKhachHang = @MaKhachHang;
+            """, connection, transaction))
+        {
+            pointsCommand.Parameters.Add("@Diem", SqlDbType.Int).Value = points;
+            pointsCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = order.MaKhachHang!;
+            await pointsCommand.ExecuteNonQueryAsync();
+        }
+
+        await transaction.CommitAsync();
+        return null;
+    }
+
+    public async Task<string?> SaveImportAsync(PhieuNhap import)
+    {
+        var line = import.ChiTiet.Single();
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        await using (var importCommand = new SqlCommand(
+            """
+            INSERT INTO dbo.PhieuNhap (MaPhieuNhap, MaNCC, MaKho, MaNV, NgayNhap, TongTien)
+            VALUES (@MaPhieuNhap, @MaNCC, @MaKho, @MaNV, @NgayNhap, @TongTien);
+            INSERT INTO dbo.ChiTietPhieuNhap (MaPhieuNhap, MaSP, SoLuong, DonGiaNhap, ThanhTien)
+            VALUES (@MaPhieuNhap, @MaSP, @SoLuong, @DonGiaNhap, @ThanhTien);
+            """, connection, transaction))
+        {
+            importCommand.Parameters.Add("@MaPhieuNhap", SqlDbType.VarChar, 50).Value = import.MaPhieuNhap;
+            importCommand.Parameters.Add("@MaNCC", SqlDbType.VarChar, 50).Value = import.MaNCC!;
+            importCommand.Parameters.Add("@MaKho", SqlDbType.VarChar, 50).Value = import.MaKho!;
+            importCommand.Parameters.Add("@MaNV", SqlDbType.VarChar, 50).Value = import.MaNV!;
+            importCommand.Parameters.Add("@NgayNhap", SqlDbType.DateTime).Value = import.NgayNhap!.Value;
+            var total = importCommand.Parameters.Add("@TongTien", SqlDbType.Decimal);
+            total.Precision = 18;
+            total.Scale = 2;
+            total.Value = import.TongTien;
+            importCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+            importCommand.Parameters.Add("@SoLuong", SqlDbType.Int).Value = line.SoLuong;
+            var unitPrice = importCommand.Parameters.Add("@DonGiaNhap", SqlDbType.Decimal);
+            unitPrice.Precision = 18;
+            unitPrice.Scale = 2;
+            unitPrice.Value = line.DonGiaNhap;
+            var lineTotal = importCommand.Parameters.Add("@ThanhTien", SqlDbType.Decimal);
+            lineTotal.Precision = 18;
+            lineTotal.Scale = 2;
+            lineTotal.Value = line.ThanhTien;
+            await importCommand.ExecuteNonQueryAsync();
+        }
+
+        await using (var inventoryCommand = new SqlCommand(
+            """
+            UPDATE dbo.TonKho WITH (UPDLOCK, SERIALIZABLE)
+            SET SoLuongTon = SoLuongTon + @SoLuong
+            WHERE MaKho = @MaKho AND MaSP = @MaSP;
+            IF @@ROWCOUNT = 0
+                INSERT INTO dbo.TonKho (MaKho, MaSP, SoLuongTon, SoLuongDaBan, MucToiThieu, MucToiDa)
+                VALUES (@MaKho, @MaSP, @SoLuong, 0, 20, 200);
+            """, connection, transaction))
+        {
+            inventoryCommand.Parameters.Add("@MaKho", SqlDbType.VarChar, 50).Value = import.MaKho!;
+            inventoryCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+            inventoryCommand.Parameters.Add("@SoLuong", SqlDbType.Int).Value = line.SoLuong;
+            await inventoryCommand.ExecuteNonQueryAsync();
+        }
+
+        await transaction.CommitAsync();
+        return null;
+    }
+
+    public async Task<string?> AddCustomerAsync(KhachHang customer, TheThanhVien card)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var command = new SqlCommand(
+            """
+            INSERT INTO dbo.KhachHang (MaKhachHang, MaLoai, MaNV, HoTen, SoDienThoai, Email, DiaChi)
+            VALUES (@MaKhachHang, @MaLoai, @MaNV, @HoTen, @SoDienThoai, @Email, @DiaChi);
+            INSERT INTO dbo.TheThanhVien (MaThe, MaKhachHang, NgayLap, DiemTichLuy)
+            VALUES (@MaThe, @MaKhachHang, @NgayLap, 0);
+            """, connection, transaction);
+        AddCustomerParameters(command, customer);
+        command.Parameters.Add("@MaThe", SqlDbType.VarChar, 50).Value = card.MaThe;
+        command.Parameters.Add("@NgayLap", SqlDbType.Date).Value = card.NgayLap ?? DateTime.Today;
+        await command.ExecuteNonQueryAsync();
+        await transaction.CommitAsync();
+        return null;
+    }
+
+    public async Task<bool> UpdateCustomerAsync(KhachHang customer)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var command = new SqlCommand(
+            """
+            UPDATE dbo.KhachHang
+            SET MaLoai = @MaLoai, MaNV = @MaNV, HoTen = @HoTen,
+                SoDienThoai = @SoDienThoai, Email = @Email, DiaChi = @DiaChi
+            WHERE MaKhachHang = @MaKhachHang;
+            """, connection);
+        AddCustomerParameters(command, customer);
+        return await command.ExecuteNonQueryAsync() == 1;
+    }
+
+    public async Task<bool> DeleteCustomerAsync(string customerId)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using (var checkCommand = new SqlCommand(
+            """
+            IF EXISTS (SELECT 1 FROM dbo.DonHang WHERE MaKhachHang = @MaKhachHang)
+               OR EXISTS (SELECT 1 FROM dbo.CongNo WHERE MaKhachHang = @MaKhachHang)
+               OR EXISTS (SELECT 1 FROM dbo.Voucher WHERE MaKhachHang = @MaKhachHang)
+                SELECT 1 ELSE SELECT 0;
+            """, connection, transaction))
+        {
+            checkCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = customerId;
+            var hasHistory = await checkCommand.ExecuteScalarAsync();
+            if (hasHistory != null && Convert.ToInt32(hasHistory) == 1)
+            {
+                await transaction.RollbackAsync();
+                return false;
+            }
+        }
+
+        await using (var deleteCommand = new SqlCommand(
+            """
+            DELETE FROM dbo.TaiKhoan WHERE MaKhachHang = @MaKhachHang;
+            DELETE FROM dbo.TheThanhVien WHERE MaKhachHang = @MaKhachHang;
+            DELETE FROM dbo.KhachHang WHERE MaKhachHang = @MaKhachHang;
+            """, connection, transaction))
+        {
+            deleteCommand.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = customerId;
+            await deleteCommand.ExecuteNonQueryAsync();
+        }
+
+        await transaction.CommitAsync();
+        return true;
+    }
+
+    private static void AddCustomerParameters(SqlCommand command, KhachHang customer)
+    {
+        command.Parameters.Add("@MaKhachHang", SqlDbType.VarChar, 50).Value = customer.MaKhachHang;
+        command.Parameters.Add("@MaLoai", SqlDbType.VarChar, 50).Value = (object?)customer.MaLoai ?? DBNull.Value;
+        command.Parameters.Add("@MaNV", SqlDbType.VarChar, 50).Value = (object?)customer.MaNV ?? DBNull.Value;
+        command.Parameters.Add("@HoTen", SqlDbType.NVarChar, 100).Value = customer.HoTen;
+        command.Parameters.Add("@SoDienThoai", SqlDbType.VarChar, 20).Value = (object?)customer.SoDienThoai ?? DBNull.Value;
+        command.Parameters.Add("@Email", SqlDbType.VarChar, 100).Value = (object?)customer.Email ?? DBNull.Value;
+        command.Parameters.Add("@DiaChi", SqlDbType.NVarChar, 255).Value = (object?)customer.DiaChi ?? DBNull.Value;
     }
 
     private async Task MigrateLegacyEmployeePasswordsAsync(SqlConnection connection)
@@ -390,7 +1307,11 @@ public class SqlDataStore
         var orders = await ReadAsync(connection,
             """
             SELECT dh.MaDonHang, dh.MaKhachHang, dh.MaNV, dh.NgayDat, dh.TrangThai, dh.TongTien,
-                   kh.HoTen AS TenKhachHang, kh.SoDienThoai
+                   COALESCE(dh.TenNguoiNhan, kh.HoTen) AS TenKhachHang,
+                   COALESCE(dh.TenNguoiNhan, kh.HoTen) AS TenNguoiNhan,
+                   COALESCE(dh.SoDienThoaiGiaoHang, kh.SoDienThoai) AS SoDienThoai,
+                   dh.SoDienThoaiGiaoHang,
+                   dh.DiaChiGiaoHang, dh.PhuongThucThanhToan, dh.MaVoucher, dh.TienGiamGia
             FROM dbo.DonHang dh
             LEFT JOIN dbo.KhachHang kh ON kh.MaKhachHang = dh.MaKhachHang
             """, r => new DonHang
@@ -402,7 +1323,13 @@ public class SqlDataStore
                 TrangThai = Text(r, "TrangThai"),
                 TongTien = Amount(r, "TongTien"),
                 TenKhachHang = Text(r, "TenKhachHang"),
-                SoDienThoai = Text(r, "SoDienThoai")
+                SoDienThoai = Text(r, "SoDienThoai"),
+                TenNguoiNhan = Text(r, "TenNguoiNhan"),
+                SoDienThoaiGiaoHang = Text(r, "SoDienThoaiGiaoHang"),
+                DiaChiGiaoHang = Text(r, "DiaChiGiaoHang"),
+                PhuongThucThanhToan = Text(r, "PhuongThucThanhToan"),
+                MaVoucher = Text(r, "MaVoucher"),
+                TienGiamGia = Amount(r, "TienGiamGia")
             });
         var importDetails = await ReadAsync(connection,
             """
@@ -438,10 +1365,11 @@ public class SqlDataStore
             });
         var debts = await ReadAsync(connection,
             """
-            SELECT cn.MaCongNo, cn.MaNV, cn.MaKhachHang, cn.MaNCC, cn.LoaiCongNo,
+            SELECT cn.MaCongNo, cn.MaNV, cn.MaKhachHang, cn.MaNCC, cn.MaDonHang, cn.LoaiCongNo,
                    cn.NgayPhatSinh, cn.SoTienNo, cn.HanThanhToan, cn.TrangThai,
                    COALESCE(kh.HoTen, ncc.TenNCC) AS DoiTuongTen,
-                   CASE WHEN cn.TrangThai = N'Quá hạn' OR cn.HanThanhToan < CONVERT(date, GETDATE())
+                   CASE WHEN cn.SoTienNo > 0 AND cn.TrangThai <> N'Đã thanh toán'
+                                  AND (cn.TrangThai = N'Quá hạn' OR cn.HanThanhToan < CONVERT(date, GETDATE()))
                         THEN N'Quá hạn thanh toán'
                         ELSE N'Bình thường' END AS CanhBao
             FROM dbo.CongNo cn
@@ -453,6 +1381,7 @@ public class SqlDataStore
                 MaNV = Text(r, "MaNV"),
                 MaKhachHang = Text(r, "MaKhachHang"),
                 MaNCC = Text(r, "MaNCC"),
+                MaDonHang = Text(r, "MaDonHang"),
                 LoaiCongNo = Text(r, "LoaiCongNo"),
                 NgayPhatSinh = Date(r, "NgayPhatSinh"),
                 SoTienNo = Amount(r, "SoTienNo"),
@@ -460,6 +1389,19 @@ public class SqlDataStore
                 TrangThai = Text(r, "TrangThai"),
                 DoiTuongTen = Text(r, "DoiTuongTen"),
                 CanhBao = Text(r, "CanhBao")
+            });
+        var vouchers = await ReadAsync(connection,
+            """
+            SELECT MaVoucher, MaKhachHang, GiaTri, NgayTao, NgayHetHan, MaDonHangSuDung
+            FROM dbo.Voucher
+            """, r => new Voucher
+            {
+                MaVoucher = Text(r, "MaVoucher") ?? string.Empty,
+                MaKhachHang = Text(r, "MaKhachHang") ?? string.Empty,
+                GiaTri = Amount(r, "GiaTri"),
+                NgayTao = Date(r, "NgayTao") ?? DateTime.MinValue,
+                NgayHetHan = Date(r, "NgayHetHan") ?? DateTime.MinValue,
+                MaDonHangSuDung = Text(r, "MaDonHangSuDung")
             });
 
         foreach (var order in orders)
@@ -486,11 +1428,30 @@ public class SqlDataStore
         Replace(store.ChiTietPhieuNhaps, importDetails);
         Replace(store.TonKhos, inventories);
         Replace(store.CongNos, debts);
+        Replace(store.Vouchers, vouchers);
     }
 
     private static async Task<List<T>> ReadAsync<T>(SqlConnection connection, string sql, Func<SqlDataReader, T> map)
     {
         await using var command = new SqlCommand(sql, connection);
+        await using var reader = await command.ExecuteReaderAsync();
+        var results = new List<T>();
+        while (await reader.ReadAsync())
+        {
+            results.Add(map(reader));
+        }
+
+        return results;
+    }
+
+    private static async Task<List<T>> ReadAsync<T>(
+        SqlConnection connection,
+        string sql,
+        Action<SqlCommand> configure,
+        Func<SqlDataReader, T> map)
+    {
+        await using var command = new SqlCommand(sql, connection);
+        configure(command);
         await using var reader = await command.ExecuteReaderAsync();
         var results = new List<T>();
         while (await reader.ReadAsync())

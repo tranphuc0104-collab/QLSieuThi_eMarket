@@ -1,6 +1,6 @@
 @model List<EMarket.Models.TonKho>
 @{
-    ViewData["Title"] = "UC8: Quản Lý Tồn Kho & Cảnh Báo";
+    ViewData["Title"] = "Quản Lý Tồn Kho";
     var khos = ViewBag.Khos as List<EMarket.Models.Kho>;
     var selectedKho = ViewBag.SelectedKho as string;
     var selectedFilter = ViewBag.SelectedFilter as string;
@@ -8,7 +8,6 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <span class="badge bg-warning text-dark mb-1">Use Case 8 (Mục 1.4.5 d)</span>
         <h3 class="fw-bold mb-0">Quản Lý Tồn Kho & Cảnh Báo Định Mức</h3>
         <p class="text-muted small">Theo dõi số lượng hàng đã bán, số lượng tồn theo từng kho và hệ thống cảnh báo dưới mức tối thiểu hoặc vượt mức tối đa.</p>
     </div>

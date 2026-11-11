@@ -5,7 +5,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h3 class="fw-bold mb-1">Bảng Điều Khiển Hệ Thống EMarket</h3>
-        <p class="text-muted mb-0">Hệ thống phân tích & thiết kế theo 9 Use Case nghiệp vụ siêu thị</p>
+        <p class="text-muted mb-0">Theo dõi và quản lý hoạt động siêu thị</p>
     </div>
     <div class="d-flex gap-2">
         <a asp-controller="Usecase" asp-action="BanHang" class="btn btn-primary">
@@ -72,8 +72,8 @@
 <!-- Lưới 9 Use Case trực quan -->
 <div class="card mb-4">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0 fw-bold"><i class="bi bi-diagram-3-fill text-primary me-2"></i>Bản Đồ 9 Phân Hệ Use Case Nghiệp Vụ</h5>
-        <span class="badge bg-primary">Đặc tả chuẩn từ Đồ án docx</span>
+        <h5 class="mb-0 fw-bold"><i class="bi bi-diagram-3-fill text-primary me-2"></i>Các chức năng quản lý</h5>
+        <span class="badge bg-primary">EMarket</span>
     </div>
     <div class="card-body">
         <div class="row g-3">
@@ -81,7 +81,6 @@
                 <div class="card h-100 border-primary border-opacity-25 hover-shadow">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="badge bg-primary">UC 1</span>
                             <h6 class="fw-bold mb-0">Theo dõi đơn hàng</h6>
                         </div>
                         <p class="text-muted small">Khách hàng kiểm tra trạng thái đơn: đang xử lý, đã hoàn tất theo mã đơn hàng.</p>
@@ -94,7 +93,6 @@
                 <div class="card h-100 border-primary border-opacity-25">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="badge bg-primary">UC 2</span>
                             <h6 class="fw-bold mb-0">Đặt hàng trực tuyến</h6>
                         </div>
                         <p class="text-muted small">Khách hàng chọn sản phẩm, kiểm tra tồn kho tự động, tạo đơn hàng thành công.</p>
@@ -107,7 +105,6 @@
                 <div class="card h-100 border-primary border-opacity-25">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="badge bg-primary">UC 3</span>
                             <h6 class="fw-bold mb-0">Tra cứu hàng hóa</h6>
                         </div>
                         <p class="text-muted small">Tìm kiếm sản phẩm theo tên/mã, xem đơn giá bán hiện tại và hạn sử dụng sản phẩm.</p>
@@ -120,7 +117,6 @@
                 <div class="card h-100 border-success border-opacity-25">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="badge bg-success">UC 4</span>
                             <h6 class="fw-bold mb-0">Quản lý bán hàng</h6>
                         </div>
                         <p class="text-muted small">Nhân viên lập đơn hàng, áp giá riêng/niêm yết, trừ tồn kho và cập nhật số lượng đã bán.</p>
@@ -133,7 +129,6 @@
                 <div class="card h-100 border-success border-opacity-25">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="badge bg-success">UC 5</span>
                             <h6 class="fw-bold mb-0">Quản lý khách hàng</h6>
                         </div>
                         <p class="text-muted small">Chăm sóc khách hàng: Thêm mới, phân nhóm khách VIP, cập nhật thông tin và xóa khách hàng.</p>
@@ -146,7 +141,6 @@
                 <div class="card h-100 border-success border-opacity-25">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="badge bg-success">UC 6</span>
                             <h6 class="fw-bold mb-0">Quản lý điểm mua hàng</h6>
                         </div>
                         <p class="text-muted small">Tra cứu điểm thẻ thành viên từ lịch sử mua hàng, xử lý quy đổi điểm thưởng ra voucher mua sắm.</p>
@@ -159,7 +153,6 @@
                 <div class="card h-100 border-warning border-opacity-50">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="badge bg-warning text-dark">UC 7</span>
                             <h6 class="fw-bold mb-0">Quản lý nhập hàng</h6>
                         </div>
                         <p class="text-muted small">Nhân viên kho tiếp nhận lô hàng từ Nhà cung cấp, lập phiếu nhập và tăng số lượng tồn kho.</p>
@@ -172,7 +165,6 @@
                 <div class="card h-100 border-warning border-opacity-50">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="badge bg-warning text-dark">UC 8</span>
                             <h6 class="fw-bold mb-0">Quản lý tồn kho</h6>
                         </div>
                         <p class="text-muted small">Theo dõi số lượng đã bán, kiểm kê theo từng kho và nhận cảnh báo dưới tối thiểu / vượt tối đa.</p>
@@ -185,7 +177,6 @@
                 <div class="card h-100 border-danger border-opacity-50">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="badge bg-danger">UC 9</span>
                             <h6 class="fw-bold mb-0">Quản lý công nợ</h6>
                         </div>
                         <p class="text-muted small">Theo dõi công nợ Khách hàng (phải thu) & Nhà cung cấp (phải trả), cảnh báo nợ quá hạn / vượt mức.</p>

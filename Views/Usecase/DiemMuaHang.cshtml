@@ -1,0 +1,114 @@
+@model EMarket.Models.KhachHang
+@{
+    ViewData["Title"] = "Điểm mua hàng";
+    var memberCard = ViewBag.MemberCard as EMarket.Models.TheThanhVien;
+    var orders = ViewBag.Orders as List<EMarket.Models.DonHang> ?? new();
+    var vouchers = ViewBag.Vouchers as List<EMarket.Models.Voucher> ?? new();
+    var memberLevel = Model.MaLoai switch
+    {
+        "LKH03" => "Thành viên VIP",
+        "LKH02" => "Thành viên thân thiết",
+        _ => "Thành viên thông thường"
+    };
+    var levelStyle = Model.MaLoai == "LKH03" ? "bg-warning text-dark" :
+        Model.MaLoai == "LKH02" ? "bg-info text-dark" : "bg-success-subtle text-success";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <div class="text-success fw-semibold small text-uppercase mb-1"><i class="bi bi-award me-1"></i>Khách hàng thân thiết</div>
+        <h1 class="h3 fw-bold mb-1">Điểm mua hàng của tôi</h1>
+        <p class="text-muted mb-0">Theo dõi điểm thưởng và lịch sử mua sắm tại EMarket.</p>
+    </div>
+    <a asp-controller="CuaHang" asp-action="Index" class="btn btn-success"><i class="bi bi-basket2 me-1"></i>Tiếp tục mua sắm</a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body p-4 text-center">
+                <div class="text-success display-5 mb-2"><i class="bi bi-credit-card-2-front"></i></div>
+                <span class="badge @levelStyle px-3 py-2 mb-3">@memberLevel</span>
+                <h2 class="h5 fw-bold mb-1">@Model.HoTen</h2>
+                <div class="text-muted small">Mã khách hàng: @Model.MaKhachHang</div>
+                <div class="text-muted small mb-4">Mã thẻ: @(memberCard?.MaThe ?? "Chưa cấp")</div>
+                <div class="rounded-4 p-4" style="background: #edf7ee;">
+                    <div class="small text-success fw-semibold text-uppercase">Số điểm hiện có</div>
+                    <div class="display-3 fw-bold text-success">@Model.DiemTichLuy</div>
+                    <div class="text-muted">Tương đương @((Model.DiemTichLuy * 1000).ToString("N0")) đ</div>
+                </div>
+                <p class="small text-muted mt-3 mb-0">Tích lũy 1 điểm cho mỗi 10.000 đ mua hàng.</p>
+                <form method="post" asp-action="TuDoiDiem" class="text-start mt-4">
+                    <label for="pointsToRedeem" class="form-label fw-semibold">Đổi điểm lấy voucher (1 điểm = 1.000 đ)</label>
+                    <div class="input-group">
+                        <input id="pointsToRedeem" type="number" name="soDiemDoi" class="form-control" min="10" max="@Model.DiemTichLuy" step="10" value="10" required />
+                        <button type="submit" class="btn btn-success" @(Model.DiemTichLuy < 10 ? "disabled" : "")>Đổi điểm</button>
+                    </div>
+                    <div class="form-text">Voucher được lưu trong mục bên dưới, có hạn 90 ngày và chọn khi thanh toán ở cửa hàng.</div>
+                </form>
+                <div class="text-start mt-4">
+                    <h3 class="h6 fw-bold"><i class="bi bi-ticket-perforated text-success me-2"></i>Voucher của tôi</h3>
+                    @if (vouchers.Count == 0)
+                    {
+                        <div class="small text-muted">Bạn chưa có voucher khả dụng.</div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var voucher in vouchers)
+                            {
+                                var isUsed = !string.IsNullOrEmpty(voucher.MaDonHangSuDung);
+                                var isExpired = voucher.NgayHetHan.Date < DateTime.Today;
+                                <div class="list-group-item px-0 @(isUsed || isExpired ? "text-muted" : "")">
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <strong>@voucher.MaVoucher</strong>
+                                        <span class="fw-semibold">@voucher.GiaTri.ToString("N0") đ</span>
+                                    </div>
+                                    <div class="small">Hạn @voucher.NgayHetHan.ToString("dd/MM/yyyy") · @(isUsed ? $"Đã dùng cho {voucher.MaDonHangSuDung}" : isExpired ? "Đã hết hạn" : "Chưa sử dụng")</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h2 class="h6 fw-bold mb-0"><i class="bi bi-clock-history text-success me-2"></i>Lịch sử mua hàng</h2>
+                <span class="badge bg-success-subtle text-success">@orders.Count đơn hàng</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Mã đơn</th>
+                            <th>Ngày đặt</th>
+                            <th class="text-end">Tổng tiền</th>
+                            <th class="text-end">Điểm</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (orders.Count > 0)
+                        {
+                            foreach (var order in orders)
+                            {
+                                <tr>
+                                    <td><a asp-controller="Usecase" asp-action="TheoDoiDonHang" asp-route-maDonHang="@order.MaDonHang" class="text-success fw-semibold">@order.MaDonHang</a></td>
+                                    <td>@order.NgayDat?.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td class="text-end">@order.TongTien.ToString("N0") đ</td>
+                                    <td class="text-end text-success fw-semibold">+@((int)(order.TongTien / 10000))</td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr><td colspan="4" class="text-center text-muted py-5">Bạn chưa có đơn hàng nào.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

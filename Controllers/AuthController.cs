@@ -109,7 +109,7 @@ public class AuthController : Controller
     public async Task<IActionResult> Logout()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        return RedirectToAction(nameof(Login));
+        return RedirectToAction("Index", "Home");
     }
 
     [HttpGet]
@@ -123,6 +123,6 @@ public class AuthController : Controller
         var isAdmin = role is null ? User.IsInRole("Admin") : role == "Admin";
         return isAdmin
             ? RedirectToAction("Index", "Home")
-            : RedirectToAction("TraCuuHangHoa", "Usecase");
+            : RedirectToAction("Index", "Home");
     }
 }

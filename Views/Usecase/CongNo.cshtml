@@ -1,6 +1,6 @@
 @model List<EMarket.Models.CongNo>
 @{
-    ViewData["Title"] = "UC9: Quản Lý Công Nợ";
+    ViewData["Title"] = "Quản Lý Công Nợ";
     var tab = ViewBag.CurrentTab as string ?? "KhachHang";
     var khachHangs = ViewBag.KhachHangs as List<EMarket.Models.KhachHang>;
     var nccs = ViewBag.NhaCungCaps as List<EMarket.Models.NhaCungCap>;
@@ -12,7 +12,6 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <span class="badge bg-danger mb-1">Use Case 9 (Mục 1.4.5 h & k)</span>
         <h3 class="fw-bold mb-0">Quản Lý Công Nợ Theo Chứng Từ</h3>
         <p class="text-muted small">Kiểm tra & theo dõi công nợ Khách Hàng (Khoản phải thu) và Nhà Cung Cấp (Khoản phải trả), cảnh báo nợ quá hạn hoặc quá hạn mức.</p>
     </div>
@@ -28,13 +27,13 @@
     <li class="nav-item">
         <a class="nav-link fw-bold @(tab == "KhachHang" ? "active text-danger border-danger border-bottom-0" : "text-muted")"
            asp-action="CongNo" asp-route-tab="KhachHang">
-            <i class="bi bi-people me-1"></i> 1. Công Nợ Khách Hàng (Phải Thu - Mục 1.4.5 h)
+            <i class="bi bi-people me-1"></i> Công Nợ Khách Hàng (Phải Thu)
         </a>
     </li>
     <li class="nav-item">
         <a class="nav-link fw-bold @(tab == "NhaCungCap" ? "active text-danger border-danger border-bottom-0" : "text-muted")"
            asp-action="CongNo" asp-route-tab="NhaCungCap">
-            <i class="bi bi-truck me-1"></i> 2. Công Nợ Nhà Cung Cấp (Phải Trả - Mục 1.4.5 k)
+            <i class="bi bi-truck me-1"></i> Công Nợ Nhà Cung Cấp (Phải Trả)
         </a>
     </li>
 </ul>
@@ -139,13 +138,18 @@
                     {
                         foreach (var cn in Model)
                         {
-                            var isOverdue = cn.TrangThai == "Quá hạn" || (cn.HanThanhToan.HasValue && cn.HanThanhToan.Value < DateTime.Now && cn.SoTienNo > 0);
+                            var isOverdue = cn.SoTienNo > 0 && cn.TrangThai != "Đã thanh toán" &&
+                                (cn.TrangThai == "Quá hạn" || (cn.HanThanhToan.HasValue && cn.HanThanhToan.Value.Date < DateTime.Today));
                             var isOverLimit = cn.SoTienNo > 50000000;
                             <tr>
                                 <td><code>@cn.MaCongNo</code></td>
                                 <td>
                                     <strong>@cn.DoiTuongTen</strong><br />
                                     <small class="text-muted">Mã: @(tab == "KhachHang" ? cn.MaKhachHang : cn.MaNCC)</small>
+                                    @if (!string.IsNullOrWhiteSpace(cn.MaDonHang))
+                                    {
+                                        <br /><small class="text-primary">Đơn hàng: @cn.MaDonHang</small>
+                                    }
                                 </td>
                                 <td><span class="badge bg-light text-dark border">@cn.LoaiCongNo</span></td>
                                 <td>@cn.NgayPhatSinh?.ToString("dd/MM/yyyy")</td>

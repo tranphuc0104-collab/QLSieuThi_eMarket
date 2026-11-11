@@ -1,6 +1,6 @@
 @model List<EMarket.Models.SanPham>
 @{
-    ViewData["Title"] = "UC3: Tra Cứu Thông Tin Hàng Hóa";
+    ViewData["Title"] = "Tra Cứu Hàng Hóa";
     var danhMucs = ViewBag.DanhMucs as List<EMarket.Models.DanhMuc>;
     var keyword = ViewBag.Keyword as string;
     var selectedDM = ViewBag.SelectedDM as string;
@@ -9,7 +9,6 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <span class="badge bg-primary mb-1">Use Case 3 (Mục 1.4.5 c)</span>
         <h3 class="fw-bold mb-0">Tra Cứu Thông Tin Hàng Hóa</h3>
         <p class="text-muted small">Khách hàng tìm kiếm hàng hóa, xem giá bán hiện tại và hạn sử dụng sản phẩm.</p>
     </div>

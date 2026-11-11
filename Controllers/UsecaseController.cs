@@ -1,6 +1,9 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using EMarket.Services;
 using EMarket.Models;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 
 namespace EMarket.Controllers
@@ -9,30 +12,34 @@ namespace EMarket.Controllers
     public class UsecaseController : Controller
     {
         private readonly DataStore _db;
+        private readonly SqlDataStore _sqlDataStore;
 
-        public UsecaseController(DataStore db)
+        public UsecaseController(DataStore db, SqlDataStore sqlDataStore)
         {
             _db = db;
+            _sqlDataStore = sqlDataStore;
         }
 
         // ==========================================
         // 1. UC1: THEO DÕI QUÁ TRÌNH XỬ LÝ ĐƠN HÀNG
         // ==========================================
         [Authorize(Roles = "Customer")]
-        public IActionResult TheoDoiDonHang(string? maDonHang)
+        public async Task<IActionResult> TheoDoiDonHang(string? maDonHang)
         {
-            var customerId = User.FindFirst("CustomerId")?.Value;
-            ViewBag.AllOrders = _db.DonHangs
-                .Where(d => d.MaKhachHang == customerId)
-                .OrderByDescending(d => d.NgayDat)
-                .ToList();
+            var customerId = await GetCurrentCustomerIdAsync();
+            if (customerId == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            var orders = await _sqlDataStore.GetCustomerOrdersAsync(customerId);
+            ViewBag.AllOrders = orders;
             if (string.IsNullOrWhiteSpace(maDonHang))
             {
                 return View(null);
             }
 
-            var order = _db.DonHangs.FirstOrDefault(d =>
-                d.MaKhachHang == customerId &&
+            var order = orders.FirstOrDefault(d =>
                 d.MaDonHang.Trim().Equals(maDonHang.Trim(), StringComparison.OrdinalIgnoreCase));
             if (order == null)
             {
@@ -51,83 +58,195 @@ namespace EMarket.Controllers
         [Authorize(Roles = "Customer")]
         public IActionResult DatHang()
         {
-            var customerId = User.FindFirst("CustomerId")?.Value;
-            ViewBag.KhachHangs = _db.KhachHangs.Where(k => k.MaKhachHang == customerId).ToList();
-            ViewBag.SanPhams = _db.SanPhams.ToList();
-            return View();
+            return RedirectToAction("Index", "CuaHang");
         }
 
         [Authorize(Roles = "Customer")]
         [HttpPost]
         public IActionResult DatHang(string maKhachHang, string maSP, int soLuong, string? ghiChu)
         {
-            maKhachHang = User.FindFirst("CustomerId")?.Value ?? string.Empty;
-            ViewBag.KhachHangs = _db.KhachHangs.Where(k => k.MaKhachHang == maKhachHang).ToList();
-            ViewBag.SanPhams = _db.SanPhams.ToList();
+            TempData["Error"] = "Vui lòng thêm sản phẩm vào giỏ hàng và hoàn tất thông tin giao hàng để đặt đơn.";
+            return RedirectToAction("Index", "CuaHang");
+        }
 
-            if (string.IsNullOrEmpty(maKhachHang) || string.IsNullOrEmpty(maSP) || soLuong <= 0)
+        [Authorize(Roles = "Customer")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DatHangTuGioHang(
+            List<string>? maSP,
+            List<int>? soLuong,
+            string? tenNguoiNhan,
+            string? soDienThoaiGiaoHang,
+            string? diaChiGiaoHang,
+            string? phuongThucThanhToan,
+            string? maVoucher)
+        {
+            var customerId = User.FindFirst("CustomerId")?.Value;
+            var customer = _db.KhachHangs.FirstOrDefault(k => k.MaKhachHang == customerId);
+            if (customer == null)
             {
-                ViewBag.Error = "Thông tin không hợp lệ! Vui lòng chọn khách hàng, mặt hàng và nhập số lượng > 0.";
-                return View();
+                TempData["Error"] = "Không tìm thấy hồ sơ khách hàng. Vui lòng liên hệ siêu thị để được hỗ trợ.";
+                return RedirectToAction("Index", "CuaHang");
             }
 
-            var sp = _db.SanPhams.FirstOrDefault(s => s.MaSP == maSP);
-            if (sp == null)
+            tenNguoiNhan = tenNguoiNhan?.Trim();
+            soDienThoaiGiaoHang = soDienThoaiGiaoHang?.Trim();
+            diaChiGiaoHang = diaChiGiaoHang?.Trim();
+            if (string.IsNullOrWhiteSpace(tenNguoiNhan) || tenNguoiNhan.Length > 100 ||
+                string.IsNullOrWhiteSpace(soDienThoaiGiaoHang) ||
+                !System.Text.RegularExpressions.Regex.IsMatch(soDienThoaiGiaoHang, @"^[0-9+().\-\s]{8,20}$") ||
+                string.IsNullOrWhiteSpace(diaChiGiaoHang) || diaChiGiaoHang.Length > 255 ||
+                maVoucher is { Length: > 50 } ||
+                phuongThucThanhToan is not ("Thanh toán khi nhận hàng" or "Chuyển khoản ngân hàng" or "Ghi nợ"))
             {
-                ViewBag.Error = "Sản phẩm không tồn tại trong hệ thống!";
-                return View();
+                TempData["Error"] = "Vui lòng nhập tên, số điện thoại, địa chỉ giao hàng hợp lệ và chọn phương thức thanh toán.";
+                return RedirectToAction("Index", "CuaHang");
             }
 
-            if (sp.SoLuongTon < soLuong)
+            if (maSP == null || soLuong == null || maSP.Count == 0 ||
+                maSP.Count != soLuong.Count || maSP.Count > 100)
             {
-                ViewBag.Error = $"Hàng không đủ! Sản phẩm '{sp.TenSP}' chỉ còn {sp.SoLuongTon} {sp.DonViTinh} trong kho (bạn đặt {soLuong}).";
-                return View();
+                TempData["Error"] = "Giỏ hàng không hợp lệ hoặc đang trống. Vui lòng kiểm tra lại giỏ hàng.";
+                return RedirectToAction("Index", "CuaHang");
             }
 
-            var kh = _db.KhachHangs.FirstOrDefault(k => k.MaKhachHang == maKhachHang);
-            var newId = "DH" + DateTime.Now.ToString("yyyyMMddHHmmss");
-            var thanhTien = soLuong * sp.GiaBan;
+            var requestedQuantities = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            for (var index = 0; index < maSP.Count; index++)
+            {
+                var productId = maSP[index]?.Trim();
+                if (string.IsNullOrWhiteSpace(productId) || soLuong[index] <= 0)
+                {
+                    TempData["Error"] = "Sản phẩm hoặc số lượng trong giỏ hàng không hợp lệ.";
+                    return RedirectToAction("Index", "CuaHang");
+                }
 
-            var donHang = new DonHang
+                requestedQuantities[productId] = requestedQuantities.GetValueOrDefault(productId) + soLuong[index];
+            }
+
+            var orderLines = new List<ChiTietDonHang>();
+            foreach (var request in requestedQuantities)
+            {
+                var product = _db.SanPhams.FirstOrDefault(s =>
+                    s.MaSP.Equals(request.Key, StringComparison.OrdinalIgnoreCase));
+                if (product == null)
+                {
+                    TempData["Error"] = $"Sản phẩm có mã '{request.Key}' không còn tồn tại. Vui lòng cập nhật giỏ hàng.";
+                    return RedirectToAction("Index", "CuaHang");
+                }
+
+                if (request.Value > product.SoLuongTon)
+                {
+                    TempData["Error"] = $"Sản phẩm '{product.TenSP}' chỉ còn {product.SoLuongTon} {product.DonViTinh} trong kho. Vui lòng điều chỉnh số lượng.";
+                    return RedirectToAction("Index", "CuaHang");
+                }
+
+                var quantity = (int)request.Value;
+                orderLines.Add(new ChiTietDonHang
+                {
+                    MaSP = product.MaSP,
+                    TenSP = product.TenSP,
+                    SoLuong = quantity,
+                    DonGia = product.GiaBan,
+                    ThanhTien = quantity * product.GiaBan,
+                    DonViTinh = product.DonViTinh
+                });
+            }
+
+            var newId = "DH" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + Guid.NewGuid().ToString("N")[..6];
+            foreach (var line in orderLines)
+            {
+                line.MaDonHang = newId;
+            }
+
+            var order = new DonHang
             {
                 MaDonHang = newId,
-                MaKhachHang = maKhachHang,
-                MaNV = kh?.MaNV ?? "NV02",
+                MaKhachHang = customer.MaKhachHang,
+                MaNV = customer.MaNV ?? "NV02",
                 NgayDat = DateTime.Now,
                 TrangThai = "Đang xử lý",
-                TongTien = thanhTien,
-                TenKhachHang = kh?.HoTen,
-                SoDienThoai = kh?.SoDienThoai,
-                ChiTiet = new List<ChiTietDonHang>
-                {
-                    new ChiTietDonHang
-                    {
-                        MaDonHang = newId,
-                        MaSP = sp.MaSP,
-                        TenSP = sp.TenSP,
-                        SoLuong = soLuong,
-                        DonGia = sp.GiaBan,
-                        ThanhTien = thanhTien,
-                        DonViTinh = sp.DonViTinh
-                    }
-                }
+                TongTien = orderLines.Sum(line => line.ThanhTien),
+                TenKhachHang = tenNguoiNhan,
+                TenNguoiNhan = tenNguoiNhan,
+                SoDienThoai = soDienThoaiGiaoHang,
+                SoDienThoaiGiaoHang = soDienThoaiGiaoHang,
+                DiaChiGiaoHang = diaChiGiaoHang,
+                PhuongThucThanhToan = phuongThucThanhToan,
+                MaVoucher = string.IsNullOrWhiteSpace(maVoucher) ? null : maVoucher.Trim(),
+                MaNVQuanLyCongNo = _db.NhanViens
+                    .FirstOrDefault(employee => employee.VaiTro != null &&
+                        employee.VaiTro.Contains("công nợ", StringComparison.OrdinalIgnoreCase))?.MaNV,
+                ChiTiet = orderLines
             };
 
-            // Trừ tồn kho
-            sp.SoLuongTon -= soLuong;
-            var tk = _db.TonKhos.FirstOrDefault(t => t.MaSP == sp.MaSP);
-            if (tk != null)
+            var cartSessionId = Request.Cookies["emarket-cart-id"] ?? string.Empty;
+            var saveError = await _sqlDataStore.SaveCustomerOrderAsync(order, cartSessionId);
+            if (saveError != null)
             {
-                tk.SoLuongTon -= soLuong;
-                tk.SoLuongDaBan += soLuong;
+                TempData["Error"] = saveError;
+                return RedirectToAction("Index", "CuaHang");
             }
 
-            _db.DonHangs.Insert(0, donHang);
-            _db.ChiTietDonHangs.AddRange(donHang.ChiTiet);
+            foreach (var line in orderLines)
+            {
+                var product = _db.SanPhams.First(s => s.MaSP == line.MaSP);
+                product.SoLuongTon -= line.SoLuong;
 
-            ViewBag.Success = $"Đặt hàng thành công! Mã đơn hàng của bạn là: {newId}. Bạn có thể theo dõi tiến độ ngay bây giờ.";
-            ViewBag.NewOrder = donHang;
-            return View();
+                var remainingQuantity = line.SoLuong;
+                foreach (var inventory in _db.TonKhos
+                    .Where(t => t.MaSP == line.MaSP && t.SoLuongTon > 0)
+                    .OrderBy(t => t.MaKho))
+                {
+                    var deductedQuantity = Math.Min(remainingQuantity, inventory.SoLuongTon);
+                    inventory.SoLuongTon -= deductedQuantity;
+                    inventory.SoLuongDaBan += deductedQuantity;
+                    remainingQuantity -= deductedQuantity;
+                    if (remainingQuantity == 0)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            var pointsEarned = (int)(order.TongTien / 10000);
+            customer.DiemTichLuy += pointsEarned;
+            var memberCard = _db.TheThanhViens.FirstOrDefault(card => card.MaKhachHang == customer.MaKhachHang);
+            if (memberCard != null)
+            {
+                memberCard.DiemTichLuy += pointsEarned;
+            }
+
+            if (phuongThucThanhToan == "Ghi nợ")
+            {
+                _db.CongNos.Insert(0, new CongNo
+                {
+                    MaCongNo = "CN-" + newId,
+                    MaNV = order.MaNVQuanLyCongNo,
+                    MaKhachHang = customer.MaKhachHang,
+                    MaDonHang = newId,
+                    LoaiCongNo = "Phải thu",
+                    NgayPhatSinh = order.NgayDat,
+                    SoTienNo = order.TongTien,
+                    HanThanhToan = order.NgayDat?.Date.AddDays(30),
+                    TrangThai = "Chưa trả",
+                    DoiTuongTen = customer.HoTen,
+                    CanhBao = "Bình thường"
+                });
+            }
+
+            _db.DonHangs.Insert(0, order);
+            if (order.MaVoucher != null)
+            {
+                var voucher = _db.Vouchers.FirstOrDefault(item =>
+                    item.MaVoucher == order.MaVoucher && item.MaKhachHang == customer.MaKhachHang &&
+                    item.MaDonHangSuDung == null);
+                if (voucher != null) voucher.MaDonHangSuDung = order.MaDonHang;
+            }
+            _db.ChiTietDonHangs.AddRange(orderLines);
+            TempData["Success"] = $"Đặt hàng thành công! Mã đơn hàng: {newId}. Bạn nhận được {pointsEarned} điểm. Bạn có thể tiếp tục mua sắm để tạo đơn hàng khác.";
+            TempData["ClearCart"] = true;
+            TempData["NewOrderId"] = newId;
+            return RedirectToAction("Index", "CuaHang");
         }
 
         // ==========================================
@@ -176,31 +295,154 @@ namespace EMarket.Controllers
         }
 
         [Authorize(Roles = "Admin")]
+        public IActionResult HoaDon(string? maDonHang)
+        {
+            var orders = _db.DonHangs.OrderByDescending(d => d.NgayDat).ToList();
+            ViewBag.SelectedOrder = string.IsNullOrWhiteSpace(maDonHang)
+                ? null
+                : orders.FirstOrDefault(d => d.MaDonHang.Equals(maDonHang.Trim(), StringComparison.OrdinalIgnoreCase));
+            ViewBag.SearchCode = maDonHang;
+            return View(orders);
+        }
+
+        [Authorize(Roles = "Admin")]
+        public IActionResult XuLyDonHang(string? trangThai, string? maDonHang)
+        {
+            ViewBag.SelectedStatus = trangThai;
+            ViewBag.SearchCode = maDonHang;
+            IEnumerable<DonHang> orders = _db.DonHangs.OrderByDescending(order => order.NgayDat);
+            if (!string.IsNullOrWhiteSpace(trangThai))
+            {
+                orders = orders.Where(order => order.TrangThai == trangThai);
+            }
+
+            if (!string.IsNullOrWhiteSpace(maDonHang))
+            {
+                orders = orders.Where(order => order.MaDonHang.Contains(maDonHang.Trim(), StringComparison.OrdinalIgnoreCase));
+            }
+
+            return View(orders.ToList());
+        }
+
+        [Authorize(Roles = "Admin")]
         [HttpPost]
-        public IActionResult LapDonBanHang(string maKhachHang, string maSP, int soLuong, decimal? giaApDung)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CapNhatTrangThaiDonHang(string maDonHang, string trangThaiMoi)
+        {
+            var order = _db.DonHangs.FirstOrDefault(item =>
+                item.MaDonHang.Equals(maDonHang, StringComparison.OrdinalIgnoreCase));
+            if (order == null)
+            {
+                TempData["Error"] = "Không tìm thấy đơn hàng cần cập nhật.";
+                return RedirectToAction(nameof(XuLyDonHang));
+            }
+
+            var nextStatus = order.TrangThai switch
+            {
+                "Đang xử lý" => "Đang chuẩn bị",
+                "Đang chuẩn bị" => "Đang giao",
+                "Đang giao" => "Đã hoàn tất",
+                _ => null
+            };
+            if (nextStatus == null || trangThaiMoi != nextStatus)
+            {
+                TempData["Error"] = "Đơn hàng chỉ được chuyển sang bước tiếp theo trong quy trình xử lý.";
+                return RedirectToAction(nameof(XuLyDonHang), new { trangThai = order.TrangThai });
+            }
+
+            if (!await _sqlDataStore.UpdateOrderStatusAsync(order.MaDonHang, order.TrangThai!, trangThaiMoi))
+            {
+                TempData["Error"] = "Đơn hàng vừa được cập nhật ở nơi khác. Hãy tải lại danh sách trước khi xử lý tiếp.";
+                return RedirectToAction(nameof(XuLyDonHang));
+            }
+
+            order.TrangThai = trangThaiMoi;
+            TempData["Success"] = $"Đơn hàng '{order.MaDonHang}' đã chuyển sang trạng thái '{trangThaiMoi}'.";
+            return RedirectToAction(nameof(XuLyDonHang), new { trangThai = trangThaiMoi });
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> LapDonBanHang(string? maKhachHang, List<string>? maSP, List<int>? soLuong, List<decimal?>? giaApDung)
         {
             ViewBag.KhachHangs = _db.KhachHangs.ToList();
             ViewBag.SanPhams = _db.SanPhams.ToList();
             ViewBag.RecentOrders = _db.DonHangs.OrderByDescending(d => d.NgayDat).Take(5).ToList();
 
-            if (string.IsNullOrEmpty(maKhachHang) || string.IsNullOrEmpty(maSP) || soLuong <= 0)
+            maSP ??= new List<string>();
+            soLuong ??= new List<int>();
+            giaApDung ??= new List<decimal?>();
+            if (string.IsNullOrWhiteSpace(maKhachHang) || maSP.Count == 0 ||
+                maSP.Count != soLuong.Count || maSP.Count != giaApDung.Count)
             {
-                ViewBag.Error = "Thông tin đơn hàng không hợp lệ! Vui lòng chọn khách hàng, hàng hóa và số lượng hợp lệ.";
+                ViewBag.Error = "Thông tin đơn hàng không hợp lệ! Vui lòng chọn khách hàng và ít nhất một sản phẩm.";
                 return View("BanHang");
             }
 
-            var sp = _db.SanPhams.FirstOrDefault(s => s.MaSP == maSP);
-            if (sp == null || sp.SoLuongTon < soLuong)
+            var customer = _db.KhachHangs.FirstOrDefault(k => k.MaKhachHang == maKhachHang);
+            if (customer == null)
             {
-                ViewBag.Error = $"Kho không đủ hàng! Tồn kho hiện tại: {sp?.SoLuongTon ?? 0}. Yêu cầu xuất: {soLuong}.";
+                ViewBag.Error = "Khách hàng không tồn tại trong hệ thống.";
                 return View("BanHang");
             }
 
-            var kh = _db.KhachHangs.FirstOrDefault(k => k.MaKhachHang == maKhachHang);
-            decimal donGia = giaApDung ?? sp.GiaBan;
-            decimal thanhTien = soLuong * donGia;
+            var orderLines = new List<ChiTietDonHang>();
+            var selectedProductIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var index = 0; index < maSP.Count; index++)
+            {
+                var productId = maSP[index]?.Trim();
+                if (string.IsNullOrEmpty(productId) || soLuong[index] <= 0 ||
+                    !selectedProductIds.Add(productId))
+                {
+                    ViewBag.Error = "Mỗi dòng phải chọn một sản phẩm khác nhau và có số lượng lớn hơn 0.";
+                    return View("BanHang");
+                }
 
-            var newId = "DH" + DateTime.Now.ToString("yyyyMMddHHmmss");
+                var product = _db.SanPhams.FirstOrDefault(s =>
+                    s.MaSP.Equals(productId, StringComparison.OrdinalIgnoreCase));
+                if (product == null)
+                {
+                    ViewBag.Error = $"Sản phẩm '{productId}' không tồn tại trong hệ thống.";
+                    return View("BanHang");
+                }
+
+                if (product.SoLuongTon < soLuong[index])
+                {
+                    ViewBag.Error = $"Kho không đủ '{product.TenSP}'! Tồn kho hiện tại: {product.SoLuongTon}. Yêu cầu xuất: {soLuong[index]}.";
+                    return View("BanHang");
+                }
+
+                var discountRate = customer.MaLoai switch
+                {
+                    "LKH03" => 0.10m,
+                    "LKH02" => 0.05m,
+                    _ => 0m
+                };
+                var unitPrice = giaApDung[index] ?? product.GiaBan * (1 - discountRate);
+                if (unitPrice <= 0)
+                {
+                    ViewBag.Error = $"Giá bán của '{product.TenSP}' phải lớn hơn 0.";
+                    return View("BanHang");
+                }
+
+                orderLines.Add(new ChiTietDonHang
+                {
+                    MaSP = product.MaSP,
+                    TenSP = product.TenSP,
+                    SoLuong = soLuong[index],
+                    DonGia = unitPrice,
+                    ThanhTien = soLuong[index] * unitPrice,
+                    DonViTinh = product.DonViTinh
+                });
+            }
+
+            var newId = "DH" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + Guid.NewGuid().ToString("N")[..6];
+            foreach (var line in orderLines)
+            {
+                line.MaDonHang = newId;
+            }
+
             var donHang = new DonHang
             {
                 MaDonHang = newId,
@@ -208,46 +450,45 @@ namespace EMarket.Controllers
                 MaNV = "NV02", // NV Bán hàng
                 NgayDat = DateTime.Now,
                 TrangThai = "Đã hoàn tất",
-                TongTien = thanhTien,
-                TenKhachHang = kh?.HoTen,
-                SoDienThoai = kh?.SoDienThoai,
-                ChiTiet = new List<ChiTietDonHang>
-                {
-                    new ChiTietDonHang
-                    {
-                        MaDonHang = newId,
-                        MaSP = sp.MaSP,
-                        TenSP = sp.TenSP,
-                        SoLuong = soLuong,
-                        DonGia = donGia,
-                        ThanhTien = thanhTien,
-                        DonViTinh = sp.DonViTinh
-                    }
-                }
+                TongTien = orderLines.Sum(line => line.ThanhTien),
+                TenKhachHang = customer.HoTen,
+                SoDienThoai = customer.SoDienThoai,
+                ChiTiet = orderLines
             };
 
-            // Cập nhật tồn kho & đã bán
-            sp.SoLuongTon -= soLuong;
-            var tk = _db.TonKhos.FirstOrDefault(t => t.MaSP == sp.MaSP);
-            if (tk != null)
+            var saveError = await _sqlDataStore.SavePosOrderAsync(donHang);
+            if (saveError != null)
             {
-                tk.SoLuongTon -= soLuong;
-                tk.SoLuongDaBan += soLuong;
+                ViewBag.Error = saveError;
+                return View("BanHang");
             }
 
-            // Tích điểm 1% cho khách hàng
-            int diemCong = (int)(thanhTien / 10000);
-            if (kh != null)
+            foreach (var line in orderLines)
             {
-                kh.DiemTichLuy += diemCong;
-                var the = _db.TheThanhViens.FirstOrDefault(t => t.MaKhachHang == kh.MaKhachHang);
-                if (the != null) the.DiemTichLuy += diemCong;
+                var product = _db.SanPhams.First(s => s.MaSP == line.MaSP);
+                product.SoLuongTon -= line.SoLuong;
+                var remaining = line.SoLuong;
+                foreach (var inventory in _db.TonKhos
+                    .Where(t => t.MaSP == line.MaSP && t.SoLuongTon > 0)
+                    .OrderBy(t => t.MaKho))
+                {
+                    var deduction = Math.Min(remaining, inventory.SoLuongTon);
+                    inventory.SoLuongTon -= deduction;
+                    inventory.SoLuongDaBan += deduction;
+                    remaining -= deduction;
+                    if (remaining == 0) break;
+                }
             }
+
+            var diemCong = (int)(donHang.TongTien / 10000);
+            customer.DiemTichLuy += diemCong;
+            var the = _db.TheThanhViens.FirstOrDefault(t => t.MaKhachHang == customer.MaKhachHang);
+            if (the != null) the.DiemTichLuy += diemCong;
 
             _db.DonHangs.Insert(0, donHang);
             _db.ChiTietDonHangs.AddRange(donHang.ChiTiet);
 
-            ViewBag.Success = $"Lập và lưu đơn hàng thành công! Mã hóa đơn: {newId}. Cập nhật kho -{soLuong} {sp.DonViTinh}, cộng +{diemCong} điểm cho khách hàng.";
+            ViewBag.Success = $"Lập và lưu hóa đơn thành công! Mã hóa đơn: {newId}. Đã bán {orderLines.Count} sản phẩm, tổng tiền {donHang.TongTien:N0} VNĐ và cộng +{diemCong} điểm cho khách hàng.";
             ViewBag.RecentOrders = _db.DonHangs.OrderByDescending(d => d.NgayDat).Take(5).ToList();
             return View("BanHang");
         }
@@ -265,7 +506,8 @@ namespace EMarket.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public IActionResult ThemKhachHang(KhachHang kh)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ThemKhachHang(KhachHang kh)
         {
             if (string.IsNullOrWhiteSpace(kh.MaKhachHang) || string.IsNullOrWhiteSpace(kh.HoTen))
             {
@@ -280,18 +522,25 @@ namespace EMarket.Controllers
             }
 
             var loai = _db.LoaiKhachHangs.FirstOrDefault(l => l.MaLoai == kh.MaLoai);
+            if (loai == null)
+            {
+                TempData["Error"] = "Vui lòng chọn loại khách hàng hợp lệ.";
+                return RedirectToAction("KhachHang");
+            }
+
             kh.TenLoai = loai?.TenLoai ?? "Khách thông thường";
             kh.DiemTichLuy = 0;
-            _db.KhachHangs.Add(kh);
 
-            // Tự động tạo Thẻ thành viên
-            _db.TheThanhViens.Add(new TheThanhVien
+            var card = new TheThanhVien
             {
                 MaThe = "THE" + kh.MaKhachHang,
                 MaKhachHang = kh.MaKhachHang,
                 NgayLap = DateTime.Now,
                 DiemTichLuy = 0
-            });
+            };
+            await _sqlDataStore.AddCustomerAsync(kh, card);
+            _db.KhachHangs.Add(kh);
+            _db.TheThanhViens.Add(card);
 
             TempData["Success"] = $"Thêm khách hàng '{kh.HoTen}' ({kh.MaKhachHang}) thành công!";
             return RedirectToAction("KhachHang");
@@ -299,7 +548,8 @@ namespace EMarket.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public IActionResult SuaKhachHang(KhachHang kh)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SuaKhachHang(KhachHang kh)
         {
             var existing = _db.KhachHangs.FirstOrDefault(k => k.MaKhachHang == kh.MaKhachHang);
             if (existing == null)
@@ -308,12 +558,35 @@ namespace EMarket.Controllers
                 return RedirectToAction("KhachHang");
             }
 
-            existing.HoTen = kh.HoTen;
-            existing.SoDienThoai = kh.SoDienThoai;
-            existing.Email = kh.Email;
-            existing.DiaChi = kh.DiaChi;
-            existing.MaLoai = kh.MaLoai;
-            existing.MaNV = kh.MaNV;
+            if (!_db.LoaiKhachHangs.Any(item => item.MaLoai == kh.MaLoai) ||
+                (kh.MaNV != null && !_db.NhanViens.Any(item => item.MaNV == kh.MaNV)))
+            {
+                TempData["Error"] = "Loại khách hàng hoặc nhân viên phụ trách không hợp lệ.";
+                return RedirectToAction("KhachHang");
+            }
+
+            var updated = new KhachHang
+            {
+                MaKhachHang = existing.MaKhachHang,
+                HoTen = kh.HoTen?.Trim() ?? string.Empty,
+                SoDienThoai = kh.SoDienThoai?.Trim(),
+                Email = kh.Email?.Trim(),
+                DiaChi = kh.DiaChi?.Trim(),
+                MaLoai = kh.MaLoai,
+                MaNV = kh.MaNV
+            };
+            if (!await _sqlDataStore.UpdateCustomerAsync(updated))
+            {
+                TempData["Error"] = "Không tìm thấy khách hàng trong cơ sở dữ liệu để cập nhật.";
+                return RedirectToAction("KhachHang");
+            }
+
+            existing.HoTen = updated.HoTen;
+            existing.SoDienThoai = updated.SoDienThoai;
+            existing.Email = updated.Email;
+            existing.DiaChi = updated.DiaChi;
+            existing.MaLoai = updated.MaLoai;
+            existing.MaNV = updated.MaNV;
             var loai = _db.LoaiKhachHangs.FirstOrDefault(l => l.MaLoai == kh.MaLoai);
             existing.TenLoai = loai?.TenLoai ?? existing.TenLoai;
 
@@ -323,12 +596,19 @@ namespace EMarket.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public IActionResult XoaKhachHang(string maKhachHang)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> XoaKhachHang(string maKhachHang)
         {
             var kh = _db.KhachHangs.FirstOrDefault(k => k.MaKhachHang == maKhachHang);
             if (kh == null)
             {
                 TempData["Error"] = "Không tìm thấy khách hàng cần xóa!";
+                return RedirectToAction("KhachHang");
+            }
+
+            if (!await _sqlDataStore.DeleteCustomerAsync(maKhachHang))
+            {
+                TempData["Error"] = "Không thể xóa khách hàng đã phát sinh đơn hàng, công nợ hoặc voucher.";
                 return RedirectToAction("KhachHang");
             }
 
@@ -343,6 +623,77 @@ namespace EMarket.Controllers
         // ==========================================
         // 6. UC6: QUẢN LÝ ĐIỂM MUA HÀNG
         // ==========================================
+        [Authorize(Roles = "Customer")]
+        public async Task<IActionResult> DiemMuaHang()
+        {
+            var customerId = await GetCurrentCustomerIdAsync();
+            if (customerId == null)
+            {
+                return RedirectToAction("Login", "Auth");
+            }
+
+            var customer = await _sqlDataStore.GetCustomerAsync(customerId);
+            if (customer == null)
+            {
+                return NotFound("Không tìm thấy hồ sơ khách hàng.");
+            }
+
+            ViewBag.MemberCard = await _sqlDataStore.GetMemberCardAsync(customer.MaKhachHang);
+            ViewBag.Orders = await _sqlDataStore.GetCustomerOrdersAsync(customer.MaKhachHang);
+            ViewBag.Vouchers = await _sqlDataStore.GetCustomerVouchersAsync(customer.MaKhachHang);
+            return View(customer);
+        }
+
+        [Authorize(Roles = "Customer")]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> TuDoiDiem(int soDiemDoi)
+        {
+            var customerId = await GetCurrentCustomerIdAsync();
+            var customer = customerId == null ? null : await _sqlDataStore.GetCustomerAsync(customerId);
+            if (customer == null)
+            {
+                TempData["Error"] = "Không tìm thấy hồ sơ khách hàng.";
+                return RedirectToAction(nameof(DiemMuaHang));
+            }
+
+            var result = await RedeemVoucherForCustomerAsync(customer, soDiemDoi);
+            TempData[result.Error == null ? "Success" : "Error"] = result.Error ??
+                $"Đổi thành công {soDiemDoi} điểm. Mã voucher {result.Voucher!.MaVoucher} giảm {result.Voucher.GiaTri:N0} VNĐ, có hiệu lực đến {result.Voucher.NgayHetHan:dd/MM/yyyy}.";
+            return RedirectToAction(nameof(DiemMuaHang));
+        }
+
+        private async Task<string?> GetCurrentCustomerIdAsync()
+        {
+            var customerId = User.FindFirst("CustomerId")?.Value;
+            if (!string.IsNullOrWhiteSpace(customerId))
+            {
+                return customerId;
+            }
+
+            var userName = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(userName))
+            {
+                return null;
+            }
+
+            customerId = await _sqlDataStore.GetCustomerIdForAccountAsync(userName);
+            if (string.IsNullOrWhiteSpace(customerId))
+            {
+                return null;
+            }
+
+            if (User.Identity is ClaimsIdentity identity)
+            {
+                identity.AddClaim(new Claim("CustomerId", customerId));
+                await HttpContext.SignInAsync(
+                    CookieAuthenticationDefaults.AuthenticationScheme,
+                    new ClaimsPrincipal(identity));
+            }
+
+            return customerId;
+        }
+
         [Authorize(Roles = "Admin")]
         public IActionResult DiemTichLuy(string? maKhachHang)
         {
@@ -361,12 +712,15 @@ namespace EMarket.Controllers
 
             var orders = _db.DonHangs.Where(d => d.MaKhachHang == kh.MaKhachHang).ToList();
             ViewBag.Orders = orders;
+            ViewBag.Vouchers = _db.Vouchers.Where(voucher => voucher.MaKhachHang == kh.MaKhachHang)
+                .OrderByDescending(voucher => voucher.NgayTao).ToList();
             return View(kh);
         }
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public IActionResult QuyDoiDiem(string maKhachHang, int soDiemDoi)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> QuyDoiDiem(string maKhachHang, int soDiemDoi)
         {
             ViewBag.KhachHangs = _db.KhachHangs.ToList();
             var kh = _db.KhachHangs.FirstOrDefault(k => k.MaKhachHang == maKhachHang);
@@ -378,26 +732,55 @@ namespace EMarket.Controllers
 
             var orders = _db.DonHangs.Where(d => d.MaKhachHang == kh.MaKhachHang).ToList();
             ViewBag.Orders = orders;
+            ViewBag.Vouchers = _db.Vouchers.Where(voucher => voucher.MaKhachHang == kh.MaKhachHang)
+                .OrderByDescending(voucher => voucher.NgayTao).ToList();
 
-            if (soDiemDoi <= 0)
+            var result = await RedeemVoucherForCustomerAsync(kh, soDiemDoi);
+            if (result.Error != null)
             {
-                ViewBag.Error = "Số điểm quy đổi phải lớn hơn 0!";
+                ViewBag.Error = result.Error;
                 return View("DiemTichLuy", kh);
             }
 
-            if (kh.DiemTichLuy < soDiemDoi)
-            {
-                ViewBag.Error = $"Không đủ điểm! Khách hàng chỉ có {kh.DiemTichLuy} điểm nhưng yêu cầu đổi {soDiemDoi} điểm.";
-                return View("DiemTichLuy", kh);
-            }
-
-            kh.DiemTichLuy -= soDiemDoi;
-            var the = _db.TheThanhViens.FirstOrDefault(t => t.MaKhachHang == kh.MaKhachHang);
-            if (the != null) the.DiemTichLuy = kh.DiemTichLuy;
-
-            decimal giaTriVoucher = soDiemDoi * 1000;
-            ViewBag.Success = $"Quy đổi thành công {soDiemDoi} điểm! Khách hàng nhận Voucher giảm giá {giaTriVoucher:N0} VNĐ. Điểm còn lại: {kh.DiemTichLuy}.";
+            ViewBag.Vouchers = _db.Vouchers.Where(item => item.MaKhachHang == kh.MaKhachHang)
+                .OrderByDescending(item => item.NgayTao).ToList();
+            ViewBag.Success = $"Đổi thành công {soDiemDoi} điểm. Mã voucher {result.Voucher!.MaVoucher} giảm {result.Voucher.GiaTri:N0} VNĐ, có hiệu lực đến {result.Voucher.NgayHetHan:dd/MM/yyyy}. Điểm còn lại: {kh.DiemTichLuy}.";
             return View("DiemTichLuy", kh);
+        }
+
+        private async Task<(Voucher? Voucher, string? Error)> RedeemVoucherForCustomerAsync(KhachHang customer, int points)
+        {
+            if (points < 10 || points % 10 != 0)
+            {
+                return (null, "Số điểm quy đổi phải từ 10 điểm trở lên và theo bội số 10.");
+            }
+
+            if (customer.DiemTichLuy < points)
+            {
+                return (null, $"Không đủ điểm! Khách hàng chỉ có {customer.DiemTichLuy} điểm nhưng yêu cầu đổi {points} điểm.");
+            }
+
+            var voucher = new Voucher
+            {
+                MaVoucher = "EM" + Guid.NewGuid().ToString("N")[..16].ToUpperInvariant(),
+                MaKhachHang = customer.MaKhachHang,
+                GiaTri = points * 1000m,
+                NgayTao = DateTime.Today,
+                NgayHetHan = DateTime.Today.AddDays(90)
+            };
+            var remainingPoints = await _sqlDataStore.RedeemVoucherAsync(customer.MaKhachHang, points, voucher);
+            if (remainingPoints == null)
+            {
+                return (null, "Không thể quy đổi: thẻ thành viên không tồn tại hoặc số điểm đã thay đổi. Vui lòng tải lại trang.");
+            }
+
+            customer.DiemTichLuy = remainingPoints.Value;
+            var cachedCustomer = _db.KhachHangs.FirstOrDefault(item => item.MaKhachHang == customer.MaKhachHang);
+            if (cachedCustomer != null) cachedCustomer.DiemTichLuy = remainingPoints.Value;
+            var memberCard = _db.TheThanhViens.FirstOrDefault(card => card.MaKhachHang == customer.MaKhachHang);
+            if (memberCard != null) memberCard.DiemTichLuy = remainingPoints.Value;
+            _db.Vouchers.Insert(0, voucher);
+            return (voucher, null);
         }
 
         // ==========================================
@@ -415,7 +798,8 @@ namespace EMarket.Controllers
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public IActionResult TaoPhieuNhap(string maNCC, string maKho, string maSP, int soLuong, decimal donGiaNhap)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> TaoPhieuNhap(string maNCC, string maKho, string maSP, int soLuong, decimal donGiaNhap)
         {
             ViewBag.NhaCungCaps = _db.NhaCungCaps.ToList();
             ViewBag.Khos = _db.Khos.ToList();
@@ -431,8 +815,13 @@ namespace EMarket.Controllers
             var ncc = _db.NhaCungCaps.FirstOrDefault(n => n.MaNCC == maNCC);
             var kho = _db.Khos.FirstOrDefault(k => k.MaKho == maKho);
             var sp = _db.SanPhams.FirstOrDefault(s => s.MaSP == maSP);
+            if (ncc == null || kho == null || sp == null)
+            {
+                ViewBag.Error = "Nhà cung cấp, kho hoặc sản phẩm đã chọn không tồn tại.";
+                return View("NhapHang");
+            }
 
-            var newPnId = "PN" + DateTime.Now.ToString("yyyyMMddHHmmss");
+            var newPnId = "PN" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + Guid.NewGuid().ToString("N")[..6];
             decimal thanhTien = soLuong * donGiaNhap;
 
             var phieuNhap = new PhieuNhap
@@ -458,6 +847,8 @@ namespace EMarket.Controllers
                     }
                 }
             };
+
+            await _sqlDataStore.SaveImportAsync(phieuNhap);
 
             // Cập nhật tồn kho
             if (sp != null)
@@ -570,23 +961,38 @@ namespace EMarket.Controllers
                     list = list.Where(c => c.MaNCC == maDoiTuong);
             }
 
-            if (!string.IsNullOrEmpty(trangThai))
+            if (trangThai == "Quá hạn")
             {
-                list = list.Where(c => c.TrangThai == trangThai);
+                list = list.Where(c => c.SoTienNo > 0 && c.TrangThai != "Đã thanh toán" &&
+                    (c.TrangThai == "Quá hạn" ||
+                     (c.HanThanhToan.HasValue && c.HanThanhToan.Value.Date < DateTime.Today)));
+            }
+            else if (trangThai == "Chưa trả")
+            {
+                list = list.Where(c => c.SoTienNo > 0 && c.TrangThai != "Đã thanh toán" &&
+                    c.TrangThai != "Quá hạn" &&
+                    (!c.HanThanhToan.HasValue || c.HanThanhToan.Value.Date >= DateTime.Today));
+            }
+            else if (trangThai == "Đã thanh toán")
+            {
+                list = list.Where(c => c.SoTienNo <= 0 || c.TrangThai == "Đã thanh toán");
             }
 
             var result = list.ToList();
 
             // Tính toán tổng số
             ViewBag.TongNo = result.Sum(c => c.SoTienNo);
-            ViewBag.SoChungTuQuaHan = result.Count(c => c.TrangThai == "Quá hạn" || (c.HanThanhToan.HasValue && c.HanThanhToan.Value < DateTime.Now));
+            ViewBag.SoChungTuQuaHan = result.Count(c => c.SoTienNo > 0 &&
+                c.TrangThai != "Đã thanh toán" &&
+                (c.TrangThai == "Quá hạn" || (c.HanThanhToan.HasValue && c.HanThanhToan.Value.Date < DateTime.Today)));
 
             return View(result);
         }
 
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public IActionResult CapNhatCongNo(string maCongNo, decimal soTienThanhToan)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CapNhatCongNo(string maCongNo, decimal soTienThanhToan)
         {
             var cn = _db.CongNos.FirstOrDefault(c => c.MaCongNo == maCongNo);
             if (cn == null)
@@ -601,15 +1007,24 @@ namespace EMarket.Controllers
                 return RedirectToAction("CongNo", new { tab = cn.LoaiCongNo == "Phải thu" ? "KhachHang" : "NhaCungCap" });
             }
 
-            cn.SoTienNo -= soTienThanhToan;
+            var update = await _sqlDataStore.RecordDebtPaymentAsync(maCongNo, soTienThanhToan);
+            if (update == null)
+            {
+                TempData["Error"] = "Chứng từ đã thay đổi hoặc đã được thanh toán. Vui lòng tải lại danh sách công nợ.";
+                return RedirectToAction("CongNo", new { tab = cn.LoaiCongNo == "Phải thu" ? "KhachHang" : "NhaCungCap" });
+            }
+
+            cn.SoTienNo = update.Value.Remaining;
+            cn.TrangThai = update.Value.Status;
             if (cn.SoTienNo == 0)
             {
-                cn.TrangThai = "Đã thanh toán";
                 cn.CanhBao = "Đã tất toán";
             }
             else
             {
-                cn.CanhBao = "Đang trả góp";
+                cn.CanhBao = cn.HanThanhToan.HasValue && cn.HanThanhToan.Value.Date < DateTime.Today
+                    ? "Quá hạn thanh toán"
+                    : "Đang trả góp";
             }
 
             TempData["Success"] = $"Cập nhật công nợ chứng từ '{maCongNo}' thành công! Đã thanh toán {soTienThanhToan:N0} VNĐ. Dư nợ còn lại: {cn.SoTienNo:N0} VNĐ.";

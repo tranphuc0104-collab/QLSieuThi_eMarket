@@ -1,5 +1,5 @@
 @{
-    ViewData["Title"] = "UC4: Quản Lý Bán Hàng";
+    ViewData["Title"] = "Quản Lý Bán Hàng";
     var khachHangs = ViewBag.KhachHangs as List<EMarket.Models.KhachHang>;
     var sanPhams = ViewBag.SanPhams as List<EMarket.Models.SanPham>;
     var recentOrders = ViewBag.RecentOrders as List<EMarket.Models.DonHang>;
@@ -9,152 +9,126 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <span class="badge bg-success mb-1">Use Case 4 (Mục 1.4.5 i)</span>
-        <h3 class="fw-bold mb-0">Quản Lý Bán Hàng Tại Quầy (POS)</h3>
-        <p class="text-muted small">Nhân viên tiếp nhận yêu cầu, áp giá bán riêng/hiện tại, trừ tồn kho và tích lũy điểm thành viên.</p>
+        <span class="badge bg-success mb-1">Quản lý bán hàng</span>
+        <h3 class="fw-bold mb-0">Bán Hàng Tại Quầy (POS)</h3>
+        <p class="text-muted small">Lập hóa đơn nhiều sản phẩm, cập nhật tồn kho và tích điểm thành viên.</p>
     </div>
-    <div>
+    <div class="d-flex gap-2 align-items-center">
         <span class="badge bg-light text-dark border p-2">
-            <i class="bi bi-person-badge text-primary me-1"></i> Nhân viên phụ trách: <strong>Hoàng Ngọc Hà (NV02)</strong>
+            <i class="bi bi-person-badge text-primary me-1"></i> Nhân viên: <strong>Hoàng Ngọc Hà (NV02)</strong>
         </span>
+        <a asp-action="HoaDon" class="btn btn-outline-primary"><i class="bi bi-receipt me-1"></i>Quản lý hóa đơn</a>
     </div>
 </div>
 
 @if (!string.IsNullOrEmpty(success))
 {
-    <div class="alert alert-success d-flex align-items-center mb-4" role="alert">
-        <i class="bi bi-check-circle-fill fs-3 me-3"></i>
-        <div>
-            <h5 class="alert-heading fw-bold mb-1">Bán Hàng Thành Công!</h5>
-            <div>@success</div>
-        </div>
-    </div>
+    <div class="alert alert-success"><i class="bi bi-check-circle-fill me-2"></i>@success</div>
 }
-
 @if (!string.IsNullOrEmpty(error))
 {
-    <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
-        <i class="bi bi-exclamation-octagon-fill fs-3 me-3"></i>
-        <div>
-            <h5 class="alert-heading fw-bold mb-1">Lỗi xử lý đơn bán</h5>
-            <div>@error</div>
-        </div>
-    </div>
+    <div class="alert alert-danger"><i class="bi bi-exclamation-octagon-fill me-2"></i>@error</div>
 }
 
 <div class="row">
-    <!-- Form Bán Hàng & Lập Hóa Đơn -->
-    <div class="col-md-7">
+    <div class="col-lg-8">
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-white">
-                <h5 class="mb-0 fw-bold"><i class="bi bi-calculator me-2 text-success"></i>Lập Đơn Bán Hàng / Xuất Hóa Đơn</h5>
+                <h5 class="mb-0 fw-bold"><i class="bi bi-calculator me-2 text-success"></i>Lập hóa đơn bán hàng</h5>
             </div>
             <div class="card-body p-4">
-                <form method="post" asp-action="LapDonBanHang">
-                    <!-- Chọn khách hàng -->
+                <form method="post" asp-action="LapDonBanHang" id="posForm">
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">1. Khách Hàng mua hàng:</label>
-                        <select name="maKhachHang" id="selectKhachHang" class="form-select" required onchange="applyCustomerPolicy()">
+                        <label class="form-label fw-semibold" for="selectKhachHang">Khách hàng</label>
+                        <select name="maKhachHang" id="selectKhachHang" class="form-select" required>
                             <option value="">-- Chọn khách hàng --</option>
                             @if (khachHangs != null)
                             {
                                 foreach (var kh in khachHangs)
                                 {
-                                    <option value="@kh.MaKhachHang" data-loai="@kh.MaLoai" data-diem="@kh.DiemTichLuy">
-                                        @kh.HoTen - @kh.SoDienThoai (@kh.TenLoai)
-                                    </option>
+                                    <option value="@kh.MaKhachHang" data-loai="@kh.MaLoai">@kh.HoTen - @kh.SoDienThoai (@kh.TenLoai)</option>
                                 }
                             }
                         </select>
                         <div id="customerPolicyAlert" class="mt-2 text-primary small fw-semibold" style="display:none;"></div>
                     </div>
 
-                    <!-- Chọn hàng hóa -->
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">2. Hàng Hóa:</label>
-                        <select name="maSP" id="selectHangHoa" class="form-select" required onchange="calcPosTotal()">
-                            <option value="" data-base-price="0" data-stock="0" data-unit="">-- Chọn sản phẩm bán --</option>
-                            @if (sanPhams != null)
-                            {
-                                foreach (var sp in sanPhams)
-                                {
-                                    <option value="@sp.MaSP" data-base-price="@sp.GiaBan" data-stock="@sp.SoLuongTon" data-unit="@sp.DonViTinh">
-                                        @sp.TenSP (Tồn kho: @sp.SoLuongTon @sp.DonViTinh) - Niêm yết: @sp.GiaBan.ToString("N0") đ
-                                    </option>
-                                }
-                            }
-                        </select>
-                    </div>
-
-                    <div class="row">
-                        <!-- Giá áp dụng (Có thể điều chỉnh bảng giá riêng / chiết khấu) -->
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold">3. Giá bán áp dụng (VNĐ):</label>
-                            <input type="number" id="giaApDung" name="giaApDung" class="form-control" required oninput="calcPosTotal()" />
-                            <small class="text-muted" id="priceNote">Hệ thống tự động áp giá ưu đãi</small>
-                        </div>
-
-                        <!-- Số lượng -->
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold">4. Số lượng bán:</label>
-                            <input type="number" id="posQty" name="soLuong" class="form-control" min="1" value="1" required oninput="calcPosTotal()" />
-                            <small class="text-muted" id="stockNote">Kiểm tra tồn kho trước khi bấm lưu</small>
-                        </div>
-                    </div>
-
-                    <!-- Tóm tắt thanh toán -->
-                    <div class="p-3 bg-light rounded-3 mb-4 border">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Đơn giá áp dụng:</span>
-                            <span class="fw-semibold" id="previewUnit">0 đ</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Số lượng xuất bán:</span>
-                            <span class="fw-semibold" id="previewQty">1</span>
-                        </div>
-                        <div class="d-flex justify-content-between border-top pt-2">
-                            <span class="fs-5 fw-bold text-dark">TỔNG TIỀN PHẢI THU:</span>
-                            <span class="fs-4 fw-bold text-success" id="posTotal">0 đ</span>
-                        </div>
-                    </div>
-
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-success btn-lg flex-grow-1 fw-bold">
-                            <i class="bi bi-printer-fill me-1"></i> Lập Đơn & Xuất Hóa Đơn
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label fw-semibold mb-0">Sản phẩm trong hóa đơn</label>
+                        <button type="button" class="btn btn-sm btn-outline-success" id="addProduct">
+                            <i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm
                         </button>
                     </div>
+                    <div id="productRows">
+                        <div class="row g-2 align-items-end product-row mb-3">
+                            <div class="col-md-5">
+                                <label class="form-label small">Sản phẩm</label>
+                                <select name="maSP[0]" class="form-select product-select" required>
+                                    <option value="">-- Chọn sản phẩm --</option>
+                                    @if (sanPhams != null)
+                                    {
+                                        foreach (var sp in sanPhams)
+                                        {
+                                            <option value="@sp.MaSP" data-base-price="@sp.GiaBan" data-stock="@sp.SoLuongTon" data-unit="@sp.DonViTinh">
+                                                @sp.TenSP (Tồn: @sp.SoLuongTon @sp.DonViTinh) - @sp.GiaBan.ToString("N0") đ
+                                            </option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small">Số lượng</label>
+                                <input type="number" name="soLuong[0]" class="form-control product-qty" min="1" value="1" required />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small">Đơn giá (VNĐ)</label>
+                                <input type="number" name="giaApDung[0]" class="form-control product-price" min="1" step="1" required />
+                            </div>
+                            <div class="col-md-2 d-flex align-items-center justify-content-between">
+                                <span class="small fw-semibold text-success line-total">0 đ</span>
+                                <button type="button" class="btn btn-sm btn-outline-danger remove-product" aria-label="Xóa sản phẩm" title="Xóa sản phẩm" disabled>
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-3 bg-light rounded-3 mb-4 border d-flex justify-content-between align-items-center">
+                        <span class="fs-5 fw-bold">TỔNG TIỀN PHẢI THU:</span>
+                        <span class="fs-4 fw-bold text-success" id="posTotal">0 đ</span>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">
+                        <i class="bi bi-printer-fill me-1"></i>Lập hóa đơn
+                    </button>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- Danh sách hóa đơn bán gần đây -->
-    <div class="col-md-5">
+    <div class="col-lg-4">
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 fw-bold"><i class="bi bi-receipt me-1 text-success"></i>Hóa Đơn Vừa Bán</h6>
-                <span class="badge bg-secondary">Mới nhất</span>
+                <h6 class="mb-0 fw-bold"><i class="bi bi-receipt me-1 text-success"></i>Hóa đơn vừa bán</h6>
+                <a asp-action="HoaDon" class="small">Xem tất cả</a>
             </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush">
-                    @if (recentOrders != null)
+            <div class="list-group list-group-flush">
+                @if (recentOrders?.Any() == true)
+                {
+                    foreach (var order in recentOrders)
                     {
-                        foreach (var ord in recentOrders)
-                        {
-                            <div class="list-group-item">
-                                <div class="d-flex justify-content-between">
-                                    <strong class="text-primary">@ord.MaDonHang</strong>
-                                    <span class="text-success fw-bold">@ord.TongTien.ToString("N0") đ</span>
-                                </div>
-                                <div class="small text-muted">@ord.TenKhachHang - @ord.NgayDat?.ToString("dd/MM/yyyy HH:mm")</div>
-                                <div class="mt-1 d-flex justify-content-between">
-                                    <span class="badge bg-light text-dark border">NV: @ord.MaNV</span>
-                                    <span class="badge bg-success-subtle text-success">@ord.TrangThai</span>
-                                </div>
+                        <a asp-action="HoaDon" asp-route-maDonHang="@order.MaDonHang" class="list-group-item list-group-item-action">
+                            <div class="d-flex justify-content-between">
+                                <strong class="text-primary">@order.MaDonHang</strong>
+                                <span class="text-success fw-bold">@order.TongTien.ToString("N0") đ</span>
                             </div>
-                        }
+                            <div class="small text-muted">@order.TenKhachHang - @order.NgayDat?.ToString("dd/MM/yyyy HH:mm")</div>
+                        </a>
                     }
-                </div>
+                }
+                else
+                {
+                    <div class="p-3 text-muted small">Chưa có hóa đơn nào.</div>
+                }
             </div>
         </div>
     </div>
@@ -162,57 +136,115 @@
 
 @section Scripts {
 <script>
-    let discountRate = 0;
+    const productRows = document.getElementById("productRows");
+    const customerSelect = document.getElementById("selectKhachHang");
+    const policyAlert = document.getElementById("customerPolicyAlert");
 
-    function applyCustomerPolicy() {
-        const selectKH = document.getElementById("selectKhachHang");
-        const selected = selectKH.options[selectKH.selectedIndex];
-        const loai = selected.getAttribute("data-loai");
-        const alertBox = document.getElementById("customerPolicyAlert");
-
-        if (loai === "LKH03") { // Khách VIP
-            discountRate = 0.10;
-            alertBox.style.display = "block";
-            alertBox.innerText = "★ Khách hàng VIP: Áp dụng bảng giá riêng chiết khấu 10% trên giá niêm yết.";
-        } else if (loai === "LKH02") { // Thân thiết
-            discountRate = 0.05;
-            alertBox.style.display = "block";
-            alertBox.innerText = "★ Khách hàng Thân Thiết: Chiết khấu 5% trên đơn giá niêm yết.";
-        } else {
-            discountRate = 0;
-            alertBox.style.display = "none";
-        }
-        calcPosTotal();
+    function currentDiscount() {
+        const type = customerSelect.options[customerSelect.selectedIndex]?.dataset.loai;
+        if (type === "LKH03") return 0.10;
+        if (type === "LKH02") return 0.05;
+        return 0;
     }
 
-    function calcPosTotal() {
-        const spSelect = document.getElementById("selectHangHoa");
-        const selected = spSelect.options[spSelect.selectedIndex];
-        const basePrice = parseFloat(selected.getAttribute("data-base-price")) || 0;
-        const stock = parseInt(selected.getAttribute("data-stock")) || 0;
-        const unit = selected.getAttribute("data-unit") || "";
-
-        let finalPrice = basePrice * (1 - discountRate);
-        const inputPrice = document.getElementById("giaApDung");
-        
-        // Nếu người dùng chưa gõ tay giá thì tự set theo chính sách
-        if (!inputPrice.dataset.manual) {
-            inputPrice.value = Math.round(finalPrice);
-        } else {
-            finalPrice = parseFloat(inputPrice.value) || 0;
-        }
-
-        const qty = parseInt(document.getElementById("posQty").value) || 0;
-        const total = qty * finalPrice;
-
-        document.getElementById("previewUnit").innerText = finalPrice.toLocaleString('vi-VN') + " đ / " + unit;
-        document.getElementById("previewQty").innerText = qty + " " + unit;
-        document.getElementById("posTotal").innerText = total.toLocaleString('vi-VN') + " đ";
-        document.getElementById("stockNote").innerText = "Tồn kho: " + stock + " " + unit;
+    function reindexRows() {
+        const rows = [...productRows.querySelectorAll(".product-row")];
+        rows.forEach((row, index) => {
+            row.querySelector(".product-select").name = `maSP[${index}]`;
+            row.querySelector(".product-qty").name = `soLuong[${index}]`;
+            row.querySelector(".product-price").name = `giaApDung[${index}]`;
+            row.querySelector(".remove-product").disabled = rows.length === 1;
+        });
+        updateSelectedProducts();
     }
 
-    document.getElementById("giaApDung").addEventListener("input", function() {
-        this.dataset.manual = "true";
+    function updateSelectedProducts() {
+        const selects = [...productRows.querySelectorAll(".product-select")];
+        const selected = selects.map(select => select.value).filter(Boolean);
+        selects.forEach(select => {
+            [...select.options].forEach(option => {
+                option.disabled = option.value !== "" && selected.includes(option.value) && select.value !== option.value;
+            });
+        });
+    }
+
+    function updateTotals() {
+        let total = 0;
+        const discount = currentDiscount();
+        productRows.querySelectorAll(".product-row").forEach(row => {
+            const select = row.querySelector(".product-select");
+            const option = select.options[select.selectedIndex];
+            const qtyInput = row.querySelector(".product-qty");
+            const priceInput = row.querySelector(".product-price");
+            const basePrice = Number(option.dataset.basePrice) || 0;
+            const suggestedPrice = Math.round(basePrice * (1 - discount));
+
+            if (!select.value) {
+                priceInput.value = "";
+                delete priceInput.dataset.manual;
+            } else if (!priceInput.dataset.manual) {
+                priceInput.value = suggestedPrice;
+            }
+
+            const qty = Number(qtyInput.value) || 0;
+            const price = Number(priceInput.value) || 0;
+            const lineTotal = qty * price;
+            total += lineTotal;
+            row.querySelector(".line-total").textContent = lineTotal.toLocaleString("vi-VN") + " đ";
+        });
+        document.getElementById("posTotal").textContent = total.toLocaleString("vi-VN") + " đ";
+    }
+
+    customerSelect.addEventListener("change", () => {
+        const type = customerSelect.options[customerSelect.selectedIndex]?.dataset.loai;
+        if (type === "LKH03") {
+            policyAlert.textContent = "Khách hàng VIP: giảm 10% trên giá niêm yết.";
+            policyAlert.style.display = "block";
+        } else if (type === "LKH02") {
+            policyAlert.textContent = "Khách hàng thân thiết: giảm 5% trên giá niêm yết.";
+            policyAlert.style.display = "block";
+        } else {
+            policyAlert.style.display = "none";
+        }
+        updateTotals();
     });
+
+    document.getElementById("addProduct").addEventListener("click", () => {
+        const row = productRows.querySelector(".product-row").cloneNode(true);
+        row.querySelector(".product-select").value = "";
+        row.querySelector(".product-qty").value = "1";
+        row.querySelector(".product-price").value = "";
+        delete row.querySelector(".product-price").dataset.manual;
+        row.querySelector(".line-total").textContent = "0 đ";
+        productRows.appendChild(row);
+        reindexRows();
+        updateTotals();
+    });
+
+    productRows.addEventListener("click", event => {
+        const removeButton = event.target.closest(".remove-product");
+        if (removeButton && productRows.querySelectorAll(".product-row").length > 1) {
+            removeButton.closest(".product-row").remove();
+            reindexRows();
+            updateTotals();
+        }
+    });
+
+    productRows.addEventListener("change", event => {
+        if (event.target.matches(".product-select")) {
+            const priceInput = event.target.closest(".product-row").querySelector(".product-price");
+            delete priceInput.dataset.manual;
+            updateSelectedProducts();
+            updateTotals();
+        }
+    });
+    productRows.addEventListener("input", event => {
+        if (event.target.matches(".product-price")) {
+            event.target.dataset.manual = "true";
+        }
+        updateTotals();
+    });
+    reindexRows();
+    updateTotals();
 </script>
 }

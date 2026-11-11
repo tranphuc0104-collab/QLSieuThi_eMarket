@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - EMarket</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+            --bs-primary: #00897b;
+            --bs-primary-rgb: 0, 137, 123;
+            --bs-success: #00897b;
+            --bs-success-rgb: 0, 137, 123;
+            --market-green: #00897b;
+            --market-green-dark: #00695c;
+            --market-accent: #ff5722;
+            --market-text: #263238;
+            --market-muted: #718078;
+        }
+        body {
+            min-height: 100vh;
+            margin: 0;
+            background: #fafafa;
+            color: var(--market-text);
+            font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        .market-header {
+            background: var(--market-green);
+            color: #fff;
+            box-shadow: 0 3px 14px rgba(0, 105, 92, .16);
+        }
+        .market-header-inner {
+            max-width: 1320px;
+            min-height: 78px;
+            margin: auto;
+            padding: .8rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .market-logo {
+            color: #fff;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: .65rem;
+            font-size: 1.6rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .market-logo-mark {
+            width: 42px;
+            height: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 13px;
+            background: #fff;
+            color: var(--market-green);
+            font-size: 1.45rem;
+        }
+        .market-search {
+            flex: 1;
+            max-width: 660px;
+            margin: 0 auto;
+        }
+        .market-search .form-control {
+            height: 44px;
+            border: 0;
+            box-shadow: none;
+        }
+        .market-search .btn {
+            background: #e0f2f1;
+            border: 0;
+            color: var(--market-green-dark);
+            font-weight: 700;
+        }
+        .market-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1.1rem;
+        }
+        .market-action {
+            border: 0;
+            background: transparent;
+            color: #fff;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: .45rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .market-cart {
+            position: relative;
+            font-size: 1.35rem;
+        }
+        .market-cart-count {
+            position: absolute;
+            top: -9px;
+            right: -10px;
+            min-width: 19px;
+            height: 19px;
+            padding: 0 5px;
+            border-radius: 20px;
+            background: #ffc857;
+            color: #273328;
+            font-size: .68rem;
+            line-height: 19px;
+            text-align: center;
+            font-weight: 800;
+        }
+        .market-nav {
+            background: #fff;
+            border-bottom: 1px solid #e8eee8;
+        }
+        .market-nav-inner {
+            max-width: 1320px;
+            margin: auto;
+            padding: .7rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .market-nav a {
+            color: #526357;
+            text-decoration: none;
+            font-size: .92rem;
+            font-weight: 600;
+        }
+        .market-nav a:hover { color: var(--market-green); }
+        .market-main {
+            max-width: 1320px;
+            min-height: calc(100vh - 190px);
+            margin: auto;
+            padding: 1.75rem 1.25rem 3rem;
+        }
+        .market-footer {
+            padding: 1.25rem;
+            background: #e0f2f1;
+            color: var(--market-muted);
+            text-align: center;
+            font-size: .85rem;
+        }
+        .cart-line {
+            display: grid;
+            grid-template-columns: 1fr auto auto;
+            gap: .75rem;
+            align-items: center;
+            padding: .8rem 0;
+            border-bottom: 1px solid #edf0ed;
+        }
+        .market-header .market-logo-mark {
+            color: var(--market-green);
+        }
+        #marketPlaceOrder {
+            background: var(--market-green);
+            border-color: var(--market-green);
+        }
+        #marketPlaceOrder:hover {
+            background: var(--market-green-dark);
+            border-color: var(--market-green-dark);
+        }
+        @@media (max-width: 767.98px) {
+            .market-header-inner { flex-wrap: wrap; gap: .65rem; padding: .75rem 1rem; }
+            .market-logo { font-size: 1.35rem; }
+            .market-logo-mark { width: 38px; height: 38px; }
+            .market-search { order: 3; flex-basis: 100%; max-width: none; }
+            .market-header-actions { margin-left: auto; gap: .75rem; }
+            .market-action-label { display: none; }
+            .market-nav-inner { gap: 1rem; overflow-x: auto; white-space: nowrap; padding: .65rem 1rem; }
+            .market-main { padding: 1.25rem 1rem 2rem; }
+        }
+    </style>
+</head>
+<body>
+    <header class="market-header">
+        <div class="market-header-inner">
+            <a asp-controller="CuaHang" asp-action="Index" class="market-logo" aria-label="EMarket - Trang chủ">
+                <span class="market-logo-mark"><i class="bi bi-shop"></i></span>
+                <span>EMarket</span>
+            </a>
+            <form method="get" asp-controller="CuaHang" asp-action="Index" class="market-search">
+                <div class="input-group">
+                    <input type="search" name="keyword" value="@ViewBag.Keyword" class="form-control" placeholder="Tìm rau củ, thực phẩm, hàng tiêu dùng..." aria-label="Tìm kiếm sản phẩm" />
+                    <button class="btn px-3" type="submit" aria-label="Tìm kiếm"><i class="bi bi-search"></i></button>
+                </div>
+            </form>
+            <div class="market-header-actions">
+                <button type="button" class="market-action market-cart" data-bs-toggle="modal" data-bs-target="#cartModal" aria-label="Mở giỏ hàng">
+                    <i class="bi bi-basket2"></i>
+                    <span class="market-action-label">Giỏ hàng</span>
+                    <span id="marketCartCount" class="market-cart-count">0</span>
+                </button>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <span class="market-action market-action-label"><i class="bi bi-person-circle"></i>@User.Identity.Name</span>
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <a asp-controller="Home" asp-action="Index" class="market-action"><i class="bi bi-speedometer2"></i><span class="market-action-label">Quản trị</span></a>
+                    }
+                    <form asp-controller="Auth" asp-action="Logout" method="post" class="m-0">
+                        <button type="submit" class="market-action"><i class="bi bi-box-arrow-right"></i><span class="market-action-label">Đăng xuất</span></button>
+                    </form>
+                }
+                else
+                {
+                    <a asp-controller="Auth" asp-action="Login" class="market-action"><i class="bi bi-box-arrow-in-right"></i><span class="market-action-label">Đăng nhập</span></a>
+                    <a asp-controller="Auth" asp-action="Register" class="market-action"><i class="bi bi-person-plus"></i><span class="market-action-label">Đăng ký</span></a>
+                }
+            </div>
+        </div>
+    </header>
+    <nav class="market-nav">
+        <div class="market-nav-inner">
+            <a asp-controller="CuaHang" asp-action="Index"><i class="bi bi-grid me-1"></i>Tất cả sản phẩm</a>
+            <a asp-controller="CuaHang" asp-action="Index"><i class="bi bi-bag-check me-1"></i>Mua sắm</a>
+            @if (User.Identity?.IsAuthenticated == true && User.IsInRole("Customer"))
+            {
+                <a asp-controller="Usecase" asp-action="TheoDoiDonHang"><i class="bi bi-clock-history me-1"></i>Đơn hàng của tôi</a>
+                <a asp-controller="Usecase" asp-action="DiemMuaHang"><i class="bi bi-award me-1"></i>Điểm mua hàng</a>
+            }
+            <a asp-controller="Usecase" asp-action="TraCuuHangHoa"><i class="bi bi-search me-1"></i>Tra cứu hàng hóa</a>
+        </div>
+    </nav>
+
+    <main class="market-main">
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="bi bi-check-circle-fill me-2"></i>@TempData["Success"]
+                @if (TempData["NewOrderId"] is string newOrderId)
+                {
+                    <a asp-controller="Usecase" asp-action="TheoDoiDonHang" asp-route-maDonHang="@newOrderId" class="alert-link ms-2">Theo dõi đơn hàng</a>
+                }
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng"></button>
+            </div>
+        }
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["Error"]
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng"></button>
+            </div>
+        }
+        @RenderBody()
+    </main>
+    <footer class="market-footer">© @DateTime.Now.Year EMarket · Thực phẩm tươi sạch mỗi ngày</footer>
+
+    <div class="modal fade" id="cartModal" tabindex="-1" aria-labelledby="cartModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold" id="cartModalLabel"><i class="bi bi-basket2 text-success me-2"></i>Giỏ hàng của bạn</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <form method="post" asp-controller="Usecase" asp-action="DatHangTuGioHang" id="marketCheckoutForm">
+                    <div class="modal-body">
+                        <div id="marketCartStep">
+                            <div id="marketCartItems"></div>
+                        </div>
+                        <div id="marketDeliveryStep" class="d-none">
+                            <h6 class="fw-bold mb-3">Thông tin nhận hàng và thanh toán</h6>
+                            <div class="mb-3">
+                                <label for="tenNguoiNhan" class="form-label">Tên người nhận</label>
+                                <input id="tenNguoiNhan" name="tenNguoiNhan" class="form-control" maxlength="100" autocomplete="name" required disabled />
+                            </div>
+                            <div class="mb-3">
+                                <label for="soDienThoaiGiaoHang" class="form-label">Số điện thoại</label>
+                                <input id="soDienThoaiGiaoHang" name="soDienThoaiGiaoHang" class="form-control" type="tel" minlength="8" maxlength="20" pattern="[0-9+().\-\s]{8,20}" autocomplete="tel" required disabled />
+                            </div>
+                            <div class="mb-3">
+                                <label for="diaChiGiaoHang" class="form-label">Địa chỉ giao hàng</label>
+                                <textarea id="diaChiGiaoHang" name="diaChiGiaoHang" class="form-control" maxlength="255" rows="2" autocomplete="street-address" required disabled></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="maVoucher" class="form-label">Voucher giảm giá</label>
+                                <select id="maVoucher" name="maVoucher" class="form-select" disabled>
+                                    <option value="">Không sử dụng voucher</option>
+                                    @if (ViewBag.ActiveVouchers is List<EMarket.Models.Voucher> activeVouchers)
+                                    {
+                                        foreach (var voucher in activeVouchers)
+                                        {
+                                            <option value="@voucher.MaVoucher">@voucher.MaVoucher — giảm @voucher.GiaTri.ToString("N0") đ (hạn @voucher.NgayHetHan.ToString("dd/MM/yyyy"))</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <fieldset class="mb-2">
+                                <legend class="form-label">Phương thức thanh toán</legend>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="phuongThucThanhToan" id="paymentCod" value="Thanh toán khi nhận hàng" required disabled />
+                                    <label class="form-check-label" for="paymentCod">Thanh toán khi nhận hàng (COD)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="phuongThucThanhToan" id="paymentTransfer" value="Chuyển khoản ngân hàng" required disabled />
+                                    <label class="form-check-label" for="paymentTransfer">Chuyển khoản ngân hàng</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="phuongThucThanhToan" id="paymentDebt" value="Ghi nợ" required disabled />
+                                    <label class="form-check-label" for="paymentDebt">Ghi nợ tài khoản khách hàng</label>
+                                </div>
+                                <div class="form-text">Đơn chuyển khoản được nhân viên xác nhận. Khoản ghi nợ sẽ chuyển vào công nợ khách hàng để nhân viên công nợ quản lý.</div>
+                            </fieldset>
+                        </div>
+                    </div>
+                    <div class="modal-footer justify-content-between">
+                        <strong>Tạm tính: <span class="text-success" id="marketCartTotal">0 đ</span></strong>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary d-none" id="marketBackToCart">Quay lại giỏ hàng</button>
+                            <button type="button" class="btn btn-success" id="marketCheckoutButton">
+                                <i class="bi bi-arrow-right me-1"></i>Tiếp tục
+                            </button>
+                            <button type="submit" class="btn btn-success d-none" id="marketPlaceOrder">
+                                <i class="bi bi-bag-check me-1"></i>Đặt hàng
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (() => {
+            const cartKey = "emarket-cart";
+            const countElement = document.getElementById("marketCartCount");
+            const itemsElement = document.getElementById("marketCartItems");
+            const totalElement = document.getElementById("marketCartTotal");
+            const checkoutButton = document.getElementById("marketCheckoutButton");
+            const placeOrderButton = document.getElementById("marketPlaceOrder");
+            const backToCartButton = document.getElementById("marketBackToCart");
+            const cartStep = document.getElementById("marketCartStep");
+            const deliveryStep = document.getElementById("marketDeliveryStep");
+            const checkoutFields = [...deliveryStep.querySelectorAll("input, textarea, select")];
+            const formatPrice = amount => amount.toLocaleString("vi-VN") + " đ";
+
+            const initialCart = @Html.Raw(ViewBag.InitialCartJson as string ?? "null");
+            if (initialCart !== null) {
+                localStorage.setItem(cartKey, JSON.stringify(initialCart));
+            }
+            const clearCartAfterOrder = @(TempData["ClearCart"] is true ? "true" : "false");
+            if (clearCartAfterOrder) {
+                localStorage.removeItem(cartKey);
+            }
+            let cartSyncError = "";
+            let cartSaveQueue = Promise.resolve();
+
+            function readCart() {
+                try {
+                    const cart = JSON.parse(localStorage.getItem(cartKey) || "[]");
+                    return Array.isArray(cart) ? cart.filter(item =>
+                        item && typeof item.id === "string" && typeof item.name === "string" &&
+                        Number.isFinite(Number(item.price)) && Number(item.price) >= 0 &&
+                        Number.isInteger(Number(item.quantity)) && Number(item.quantity) > 0
+                    ) : [];
+                } catch {
+                    return [];
+                }
+            }
+
+            function saveCart(cart) {
+                localStorage.setItem(cartKey, JSON.stringify(cart));
+                renderCart();
+                const requestToken = document.querySelector("#marketCheckoutForm input[name='__RequestVerificationToken']")?.value;
+                const quantities = Object.fromEntries(cart.map(item => [item.id, item.quantity]));
+                cartSaveQueue = cartSaveQueue.then(async () => {
+                    const response = await fetch("@Url.Action("SaveCart", "CuaHang")", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "RequestVerificationToken": requestToken
+                        },
+                        body: JSON.stringify(quantities)
+                    });
+                    if (!response.ok) {
+                        const result = await response.json().catch(() => null);
+                        throw new Error(result?.message || "Không lưu được giỏ hàng vào cơ sở dữ liệu.");
+                    }
+                    cartSyncError = "";
+                    renderCart();
+                }).catch(error => {
+                    cartSyncError = error instanceof Error ? error.message : "Không lưu được giỏ hàng vào cơ sở dữ liệu.";
+                    renderCart();
+                });
+            }
+
+            function renderCart() {
+                const cart = readCart();
+                countElement.textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+                itemsElement.replaceChildren();
+                document.querySelectorAll("#marketCheckoutForm input[type='hidden'][name^='maSP'], #marketCheckoutForm input[type='hidden'][name^='soLuong']").forEach(input => input.remove());
+                checkoutButton.disabled = cart.length === 0;
+
+                if (cart.length === 0) {
+                    const empty = document.createElement("p");
+                    empty.className = "text-muted text-center my-3";
+                    empty.textContent = "Giỏ hàng đang trống.";
+                    itemsElement.appendChild(empty);
+                }
+
+                if (cartSyncError) {
+                    const error = document.createElement("div");
+                    error.className = "alert alert-danger mt-3 mb-0";
+                    error.textContent = cartSyncError;
+                    itemsElement.appendChild(error);
+                }
+
+                let total = 0;
+                cart.forEach((item, index) => {
+                    total += item.price * item.quantity;
+                    const line = document.createElement("div");
+                    line.className = "cart-line";
+
+                    const product = document.createElement("div");
+                    const name = document.createElement("div");
+                    name.className = "fw-semibold";
+                    name.textContent = item.name;
+                    const price = document.createElement("div");
+                    price.className = "small text-muted";
+                    price.textContent = formatPrice(item.price);
+                    product.append(name, price);
+
+                    const quantity = document.createElement("input");
+                    quantity.type = "number";
+                    quantity.className = "form-control form-control-sm";
+                    quantity.min = "1";
+                    quantity.max = "9999";
+                    quantity.value = item.quantity;
+                    quantity.setAttribute("aria-label", "Số lượng " + item.name);
+                    quantity.style.width = "76px";
+                    quantity.addEventListener("change", () => {
+                        const nextQuantity = Number.parseInt(quantity.value, 10);
+                        if (!Number.isInteger(nextQuantity) || nextQuantity < 1) {
+                            saveCart(readCart().filter(entry => entry.id !== item.id));
+                            return;
+                        }
+                        const updatedCart = readCart();
+                        const updatedItem = updatedCart.find(entry => entry.id === item.id);
+                        if (updatedItem) updatedItem.quantity = nextQuantity;
+                        saveCart(updatedCart);
+                    });
+                    const remove = document.createElement("button");
+                    remove.type = "button";
+                    remove.className = "btn btn-sm btn-outline-danger";
+                    remove.setAttribute("aria-label", "Xóa " + item.name);
+                    remove.innerHTML = '<i class="bi bi-trash"></i>';
+                    remove.addEventListener("click", () => saveCart(readCart().filter(entry => entry.id !== item.id)));
+                    line.append(product, quantity, remove);
+                    itemsElement.appendChild(line);
+
+                    const productInput = document.createElement("input");
+                    productInput.type = "hidden";
+                    productInput.name = `maSP[${index}]`;
+                    productInput.value = item.id;
+                    const quantityInput = document.createElement("input");
+                    quantityInput.type = "hidden";
+                    quantityInput.name = `soLuong[${index}]`;
+                    quantityInput.value = item.quantity;
+                    document.getElementById("marketCheckoutForm").append(productInput, quantityInput);
+                });
+                totalElement.textContent = formatPrice(total);
+            }
+
+            checkoutButton.addEventListener("click", () => {
+                if (readCart().length === 0) return;
+                cartStep.classList.add("d-none");
+                deliveryStep.classList.remove("d-none");
+                checkoutButton.classList.add("d-none");
+                backToCartButton.classList.remove("d-none");
+                placeOrderButton.classList.remove("d-none");
+                checkoutFields.forEach(field => field.disabled = false);
+                document.getElementById("tenNguoiNhan").focus();
+            });
+
+            backToCartButton.addEventListener("click", () => {
+                deliveryStep.classList.add("d-none");
+                cartStep.classList.remove("d-none");
+                checkoutButton.classList.remove("d-none");
+                backToCartButton.classList.add("d-none");
+                placeOrderButton.classList.add("d-none");
+                checkoutFields.forEach(field => field.disabled = true);
+            });
+
+            document.getElementById("marketCheckoutForm").addEventListener("submit", async event => {
+                event.preventDefault();
+                if (readCart().length === 0) {
+                    return;
+                }
+                await cartSaveQueue;
+                if (cartSyncError) return;
+                placeOrderButton.disabled = true;
+                placeOrderButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Đang đặt hàng...';
+                event.currentTarget.submit();
+            });
+
+            document.addEventListener("click", event => {
+                const button = event.target.closest("[data-cart-add]");
+                if (!button) return;
+                const product = {
+                    id: button.dataset.productId,
+                    name: button.dataset.productName,
+                    price: Number(button.dataset.productPrice),
+                    quantity: 1
+                };
+                const cart = readCart();
+                const existing = cart.find(item => item.id === product.id);
+                if (existing) existing.quantity += 1;
+                else cart.push(product);
+                saveCart(cart);
+
+                const original = button.innerHTML;
+                button.innerHTML = '<i class="bi bi-check2 me-1"></i>Đã thêm';
+                button.disabled = true;
+                window.setTimeout(() => {
+                    button.innerHTML = original;
+                    button.disabled = false;
+                }, 900);
+            });
+
+            document.querySelectorAll(".market-search input[name='keyword']").forEach(input => {
+                input.addEventListener("input", () => {
+                    document.querySelectorAll(".market-search input[name='keyword']").forEach(other => {
+                        if (other !== input) other.value = input.value;
+                    });
+                });
+            });
+            renderCart();
+        })();
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

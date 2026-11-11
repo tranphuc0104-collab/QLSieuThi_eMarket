@@ -14,14 +14,9 @@ namespace EMarket.Controllers
 
         public IActionResult Index()
         {
-            if (User.Identity?.IsAuthenticated != true)
-            {
-                return RedirectToAction("Login", "Auth");
-            }
-
             if (!User.IsInRole("Admin"))
             {
-                return RedirectToAction("TraCuuHangHoa", "Usecase");
+                return RedirectToAction("Index", "CuaHang");
             }
 
             ViewBag.TotalOrders = _db.DonHangs.Count;

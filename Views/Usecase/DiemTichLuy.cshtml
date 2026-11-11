@@ -1,15 +1,23 @@
 @model EMarket.Models.KhachHang
 @{
-    ViewData["Title"] = "UC6: Quản Lý Điểm Mua Hàng";
+    ViewData["Title"] = "Quản Lý Điểm Mua Hàng";
     var khachHangs = ViewBag.KhachHangs as List<EMarket.Models.KhachHang>;
     var orders = ViewBag.Orders as List<EMarket.Models.DonHang>;
+    var vouchers = ViewBag.Vouchers as List<EMarket.Models.Voucher> ?? new();
     var success = ViewBag.Success as string;
     var error = ViewBag.Error as string;
+    var memberCardLabel = Model?.MaLoai switch
+    {
+        "LKH03" => "Thẻ khách hàng VIP",
+        "LKH02" => "Thẻ khách hàng thân thiết",
+        _ => "Thẻ khách hàng thông thường"
+    };
+    var memberCardStyle = Model?.MaLoai == "LKH03" ? "bg-warning text-dark" :
+        Model?.MaLoai == "LKH02" ? "bg-info text-dark" : "bg-secondary";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <span class="badge bg-success mb-1">Use Case 6 (Mục 1.4.5 g)</span>
         <h3 class="fw-bold mb-0">Quản Lý Điểm Mua Hàng & Đổi Thưởng</h3>
         <p class="text-muted small">Tra cứu điểm thẻ thành viên từ lịch sử mua sắm và quy đổi điểm thưởng sang Voucher giảm giá.</p>
     </div>
@@ -75,8 +83,8 @@
                     <h5 class="mb-0 fw-bold"><i class="bi bi-credit-card-2-front me-2"></i>Thẻ Thành Viên EMarket</h5>
                 </div>
                 <div class="card-body p-4 text-center">
-                    <div class="badge bg-warning text-dark fs-6 px-3 py-2 mb-3">
-                        <i class="bi bi-shield-check me-1"></i> Thẻ VIP / Thân Thiết
+                    <div class="badge @memberCardStyle fs-6 px-3 py-2 mb-3">
+                        <i class="bi bi-shield-check me-1"></i> @memberCardLabel
                     </div>
                     <h4 class="fw-bold text-dark mb-1">@Model.HoTen</h4>
                     <p class="text-muted small mb-3">Mã KH: <code>@Model.MaKhachHang</code> | ĐT: @Model.SoDienThoai</p>
@@ -107,6 +115,28 @@
                                     <div class="small text-danger text-center mt-2">Cần tối thiểu 10 điểm để quy đổi voucher.</div>
                                 }
                             </form>
+                        </div>
+                        <div class="card mt-3">
+                            <div class="card-header fw-semibold"><i class="bi bi-ticket-perforated me-1"></i>Voucher đã cấp</div>
+                            <div class="list-group list-group-flush">
+                                @if (vouchers.Count == 0)
+                                {
+                                    <div class="list-group-item small text-muted">Chưa có voucher.</div>
+                                }
+                                else
+                                {
+                                    foreach (var voucher in vouchers)
+                                    {
+                                        <div class="list-group-item">
+                                            <div class="d-flex justify-content-between gap-2">
+                                                <strong>@voucher.MaVoucher</strong>
+                                                <span>@voucher.GiaTri.ToString("N0") đ</span>
+                                            </div>
+                                            <div class="small text-muted">Hạn @voucher.NgayHetHan.ToString("dd/MM/yyyy") · @(voucher.MaDonHangSuDung == null ? "Chưa sử dụng" : $"Đã dùng: {voucher.MaDonHangSuDung}")</div>
+                                        </div>
+                                    }
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>

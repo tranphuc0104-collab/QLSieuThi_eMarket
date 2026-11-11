@@ -1,19 +1,23 @@
 @model EMarket.Models.DonHang
 @{
-    ViewData["Title"] = "UC1: Theo Dõi Quá Trình Xử Lý Đơn Hàng";
+    ViewData["Title"] = "Theo Dõi Đơn Hàng";
     var allOrders = ViewBag.AllOrders as List<EMarket.Models.DonHang>;
     var searchCode = ViewBag.SearchCode as string;
     var error = ViewBag.Error as string;
+    var status = Model?.TrangThai ?? string.Empty;
+    var orderCancelled = status == "Đã hủy";
+    var preparationStarted = status is "Đang chuẩn bị" or "Đang giao" or "Đã hoàn tất";
+    var shippingStarted = status is "Đang giao" or "Đã hoàn tất";
+    var orderCompleted = status == "Đã hoàn tất";
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <span class="badge bg-primary mb-1">Use Case 1 (Mục 1.4.5 a)</span>
         <h3 class="fw-bold mb-0">Theo Dõi Quá Trình Xử Lý Đơn Hàng</h3>
         <p class="text-muted small">Dành cho Khách Hàng kiểm tra tiến độ tiếp nhận, chuẩn bị và hoàn tất đơn hàng.</p>
     </div>
-    <a asp-action="DatHang" class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-cart-plus me-1"></i> Tạo đơn hàng mới
+    <a asp-controller="CuaHang" asp-action="Index" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-cart-plus me-1"></i> Tiếp tục mua sắm
     </a>
 </div>
 
@@ -64,16 +68,21 @@
 
 @if (Model != null)
 {
+    var subtotal = Model.ChiTiet.Sum(item => item.ThanhTien);
     <div class="card mb-4 border-primary">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <span class="fw-bold fs-5"><i class="bi bi-receipt me-2"></i>Đơn hàng: @Model.MaDonHang</span>
-            @if (Model.TrangThai == "Đã hoàn tất")
+            @if (orderCompleted)
             {
                 <span class="badge bg-success fs-6"><i class="bi bi-check-circle-fill me-1"></i> Đã hoàn tất</span>
             }
+            else if (orderCancelled)
+            {
+                <span class="badge bg-danger fs-6"><i class="bi bi-x-circle-fill me-1"></i> Đã hủy</span>
+            }
             else
             {
-                <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split me-1"></i> Đang xử lý</span>
+                <span class="badge bg-warning text-dark fs-6"><i class="bi bi-hourglass-split me-1"></i> @status</span>
             }
         </div>
         <div class="card-body p-4">
@@ -89,18 +98,18 @@
                         <div class="text-muted small">@Model.NgayDat?.ToString("dd/MM/yyyy HH:mm")</div>
                     </div>
                     <div class="text-center">
-                        <div class="rounded-circle @(Model.TrangThai == "Đã hoàn tất" ? "bg-success" : "bg-warning") text-white d-inline-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                        <div class="rounded-circle @(preparationStarted ? "bg-success" : "bg-secondary") text-white d-inline-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
                             <i class="bi bi-box-seam"></i>
                         </div>
                         <div class="mt-2 fw-semibold small">Kiểm kho & Soạn hàng</div>
-                        <div class="text-muted small">Đã xác nhận</div>
+                        <div class="text-muted small">@(preparationStarted ? "Đang thực hiện" : "Chờ xác nhận")</div>
                     </div>
                     <div class="text-center">
-                        <div class="rounded-circle @(Model.TrangThai == "Đã hoàn tất" ? "bg-success" : "bg-secondary") text-white d-inline-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                        <div class="rounded-circle @(shippingStarted ? "bg-success" : "bg-secondary") text-white d-inline-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
                             <i class="bi bi-truck"></i>
                         </div>
                         <div class="mt-2 fw-semibold small">Giao hàng / Hoàn tất</div>
-                        <div class="text-muted small">@(Model.TrangThai == "Đã hoàn tất" ? "Thành công" : "Đang chờ")</div>
+                        <div class="text-muted small">@(orderCompleted ? "Thành công" : shippingStarted ? "Đang giao" : "Đang chờ")</div>
                     </div>
                 </div>
             </div>
@@ -111,26 +120,40 @@
                 <div class="col-md-6 mb-3">
                     <h6 class="fw-bold">Thông tin khách hàng & Đơn</h6>
                     <ul class="list-unstyled mb-0">
-                        <li><strong>Khách hàng:</strong> @Model.TenKhachHang (@Model.MaKhachHang)</li>
+                        <li><strong>Người nhận:</strong> @Model.TenNguoiNhan (@Model.MaKhachHang)</li>
                         <li><strong>Số điện thoại:</strong> @Model.SoDienThoai</li>
+                        @if (!string.IsNullOrWhiteSpace(Model.DiaChiGiaoHang))
+                        {
+                            <li><strong>Địa chỉ giao hàng:</strong> @Model.DiaChiGiaoHang</li>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.PhuongThucThanhToan))
+                        {
+                            <li><strong>Thanh toán:</strong> @Model.PhuongThucThanhToan</li>
+                        }
                         <li><strong>Ngày đặt:</strong> @Model.NgayDat?.ToString("dd/MM/yyyy HH:mm")</li>
                         <li><strong>Nhân viên tiếp nhận:</strong> @Model.MaNV</li>
                     </ul>
                 </div>
                 <div class="col-md-6 mb-3 text-md-end">
                     <h6 class="fw-bold">Trạng thái hiện tại</h6>
-                    @if (Model.TrangThai == "Đã hoàn tất")
+                    @if (orderCompleted)
                     {
                         <div class="alert alert-success d-inline-block text-start mb-0">
                             <strong><i class="bi bi-check-circle me-1"></i> Đơn hàng đã hoàn tất!</strong><br />
                             Hàng đã được giao hoặc quý khách đã nhận đầy đủ tại quầy.
                         </div>
                     }
+                    else if (orderCancelled)
+                    {
+                        <div class="alert alert-danger d-inline-block text-start mb-0">
+                            <strong><i class="bi bi-x-circle me-1"></i> Đơn hàng đã bị hủy.</strong>
+                        </div>
+                    }
                     else
                     {
                         <div class="alert alert-warning d-inline-block text-start mb-0">
-                            <strong><i class="bi bi-clock me-1"></i> Đơn hàng đang được xử lý!</strong><br />
-                            Nhân viên siêu thị đang đóng gói và kiểm kê xuất kho.
+                            <strong><i class="bi bi-clock me-1"></i> @status</strong><br />
+                            Nhân viên siêu thị đang chuẩn bị đơn hàng hoặc bàn giao vận chuyển.
                         </div>
                     }
                 </div>
@@ -167,8 +190,19 @@
                     </tbody>
                     <tfoot class="table-light">
                         <tr>
-                            <td colspan="6" class="text-end fw-bold fs-6">TỔNG CỘNG TIỀN ĐƠN HÀNG:</td>
-                            <td class="text-end fw-bold fs-5 text-danger">@Model.TongTien.ToString("N0") đ</td>
+                            <th colspan="6" class="text-end">Tổng tiền sản phẩm:</th>
+                            <th class="text-end">@subtotal.ToString("N0") đ</th>
+                        </tr>
+                        @if (Model.TienGiamGia > 0)
+                        {
+                            <tr>
+                                <th colspan="6" class="text-end text-success">Voucher @(Model.MaVoucher ?? ""):</th>
+                                <th class="text-end text-success">-@Model.TienGiamGia.ToString("N0") đ</th>
+                            </tr>
+                        }
+                        <tr>
+                            <th colspan="6" class="text-end fw-bold">KHÁCH PHẢI TRẢ:</th>
+                            <th class="text-end fw-bold fs-5 text-danger">@Model.TongTien.ToString("N0") đ</th>
                         </tr>
                     </tfoot>
                 </table>

@@ -1,0 +1,142 @@
+@model List<EMarket.Models.SanPham>
+@{
+    Layout = "_CustomerLayout";
+    ViewData["Title"] = "Thực phẩm tươi sạch";
+    var keyword = ViewBag.Keyword as string;
+}
+
+<style>
+    .store-hero {
+        padding: 1.5rem 1.75rem;
+        margin-bottom: 1.6rem;
+        border-radius: 1rem;
+        background: linear-gradient(110deg, #e0f2f1 0%, #f8fbfa 72%, #fff1eb 100%);
+        border: 1px solid #e2eeeb;
+    }
+    .store-hero h1 { color: #263238; }
+    .store-section-title { color: #263b2d; }
+    .store-product-card {
+        height: 100%;
+        border: 1px solid #eeeeee;
+        border-radius: .9rem;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 2px 12px rgba(38, 50, 56, .06);
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .store-product-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 26px rgba(38, 50, 56, .12);
+    }
+    .product-placeholder {
+        height: 190px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(145deg, #e0f2f1, #fafafa);
+        color: #00897b;
+        font-size: 4.2rem;
+    }
+    .product-placeholder i { filter: drop-shadow(0 5px 5px rgba(0, 137, 123, .12)); }
+    .product-card-body { padding: 1rem; }
+    .product-name {
+        min-height: 2.8rem;
+        color: #293a2d;
+        font-size: .97rem;
+        font-weight: 650;
+        line-height: 1.4;
+    }
+    .product-price { color: var(--market-accent); font-size: 1.15rem; font-weight: 800; }
+    .product-meta { color: #78857a; font-size: .8rem; }
+    .add-cart-button {
+        background: var(--market-accent);
+        border-color: var(--market-accent);
+        font-weight: 650;
+    }
+    .add-cart-button:hover, .add-cart-button:focus {
+        background: #e64a19;
+        border-color: #e64a19;
+    }
+    @@media (max-width: 575.98px) {
+        .store-hero { padding: 1.1rem; }
+        .store-hero h1 { font-size: 1.4rem; }
+        .product-placeholder { height: 138px; font-size: 3.2rem; }
+        .product-card-body { padding: .75rem; }
+        .product-name { font-size: .87rem; min-height: 2.5rem; }
+        .product-price { font-size: 1rem; }
+        .add-cart-button { padding: .4rem .3rem; font-size: .78rem; }
+    }
+</style>
+
+<section class="store-hero d-flex flex-wrap justify-content-between align-items-center gap-3">
+    <div>
+        <div class="text-success fw-semibold small text-uppercase mb-1"><i class="bi bi-leaf-fill me-1"></i>Tươi ngon mỗi ngày</div>
+        <h1 class="fw-bold mb-1">Thực phẩm tươi sạch cho gia đình</h1>
+        <p class="text-secondary mb-0">Chọn nhanh những sản phẩm chất lượng từ EMarket.</p>
+    </div>
+    <div class="text-success fs-1 d-none d-sm-block"><i class="bi bi-basket2"></i></div>
+</section>
+
+<div class="d-flex justify-content-between align-items-end mb-3">
+    <div>
+        <h2 class="h4 store-section-title fw-bold mb-1">@(string.IsNullOrWhiteSpace(keyword) ? "Sản phẩm nổi bật" : "Kết quả tìm kiếm")</h2>
+        <div class="text-muted small">
+            @if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                <span>Từ khóa: “@keyword” · </span>
+            }
+            @Model.Count sản phẩm
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(keyword))
+    {
+        <a asp-controller="CuaHang" asp-action="Index" class="btn btn-sm btn-outline-success">Xóa tìm kiếm</a>
+    }
+</div>
+
+@if (Model.Count > 0)
+{
+    <div class="row g-3 g-md-4">
+        @foreach (var product in Model)
+        {
+            <div class="col-6 col-lg-3">
+                <article class="store-product-card">
+                    <div class="product-placeholder" aria-label="Ảnh minh họa sản phẩm">
+                        <i class="bi bi-basket2-fill"></i>
+                    </div>
+                    <div class="product-card-body d-flex flex-column">
+                        <div class="product-meta mb-1">@product.TenDanhMuc</div>
+                        <div class="product-name">@product.TenSP</div>
+                        <div class="d-flex justify-content-between align-items-center mt-2 mb-3">
+                            <span class="product-price">@product.GiaBan.ToString("N0") đ</span>
+                            <span class="product-meta">/@(product.DonViTinh ?? "sp")</span>
+                        </div>
+                        @if (product.SoLuongTon > 0)
+                        {
+                            <button type="button"
+                                    class="btn btn-success add-cart-button w-100 mt-auto"
+                                    data-cart-add
+                                    data-product-id="@product.MaSP"
+                                    data-product-name="@product.TenSP"
+                                    data-product-price="@product.GiaBan">
+                                <i class="bi bi-cart-plus me-1"></i>Thêm vào giỏ
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-secondary w-100 mt-auto" disabled>Hết hàng</button>
+                        }
+                    </div>
+                </article>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="text-center bg-white rounded-4 border py-5 px-3">
+        <i class="bi bi-search text-success display-5"></i>
+        <h3 class="h5 fw-bold mt-3">Chưa tìm thấy sản phẩm</h3>
+        <p class="text-muted mb-0">Thử tìm với tên hoặc mã sản phẩm khác nhé.</p>
+    </div>
+}

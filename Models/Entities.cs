@@ -148,6 +148,19 @@ namespace EMarket.Models
         // Navigation
         public string? TenKhachHang { get; set; }
         public string? SoDienThoai { get; set; }
+        [StringLength(100)]
+        public string? TenNguoiNhan { get; set; }
+        [StringLength(20)]
+        public string? SoDienThoaiGiaoHang { get; set; }
+        [StringLength(255)]
+        public string? DiaChiGiaoHang { get; set; }
+        [StringLength(50)]
+        public string? PhuongThucThanhToan { get; set; }
+        [StringLength(50)]
+        public string? MaVoucher { get; set; }
+        public decimal TienGiamGia { get; set; }
+        [StringLength(50)]
+        public string? MaNVQuanLyCongNo { get; set; }
         public List<ChiTietDonHang> ChiTiet { get; set; } = new();
     }
 
@@ -226,6 +239,8 @@ namespace EMarket.Models
         [StringLength(50)]
         public string? MaNCC { get; set; }
         [StringLength(50)]
+        public string? MaDonHang { get; set; }
+        [StringLength(50)]
         public string? LoaiCongNo { get; set; } // "Phải thu" (KH) hoặc "Phải trả" (NCC)
         public DateTime? NgayPhatSinh { get; set; }
         public decimal SoTienNo { get; set; }
@@ -235,5 +250,19 @@ namespace EMarket.Models
 
         public string? DoiTuongTen { get; set; } // Tên khách hàng hoặc tên NCC
         public string? CanhBao { get; set; } // "Quá hạn", "Vượt mức", "Bình thường"
+    }
+
+    public class Voucher
+    {
+        [Key]
+        [StringLength(50)]
+        public string MaVoucher { get; set; } = string.Empty;
+        [StringLength(50)]
+        public string MaKhachHang { get; set; } = string.Empty;
+        public decimal GiaTri { get; set; }
+        public DateTime NgayTao { get; set; }
+        public DateTime NgayHetHan { get; set; }
+        [StringLength(50)]
+        public string? MaDonHangSuDung { get; set; }
     }
 }
