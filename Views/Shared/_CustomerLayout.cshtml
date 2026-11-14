@@ -191,11 +191,14 @@
                 </div>
             </form>
             <div class="market-header-actions">
-                <button type="button" class="market-action market-cart" data-bs-toggle="modal" data-bs-target="#cartModal" aria-label="Mở giỏ hàng">
-                    <i class="bi bi-basket2"></i>
-                    <span class="market-action-label">Giỏ hàng</span>
-                    <span id="marketCartCount" class="market-cart-count">0</span>
-                </button>
+                @if (User.IsInRole("Customer"))
+                {
+                    <button type="button" class="market-action market-cart" data-bs-toggle="modal" data-bs-target="#cartModal" aria-label="Mở giỏ hàng">
+                        <i class="bi bi-basket2"></i>
+                        <span class="market-action-label">Giỏ hàng</span>
+                        <span id="marketCartCount" class="market-cart-count">0</span>
+                    </button>
+                }
                 @if (User.Identity?.IsAuthenticated == true)
                 {
                     <span class="market-action market-action-label"><i class="bi bi-person-circle"></i>@User.Identity.Name</span>
@@ -251,6 +254,8 @@
     </main>
     <footer class="market-footer">© @DateTime.Now.Year EMarket · Thực phẩm tươi sạch mỗi ngày</footer>
 
+    @if (User.IsInRole("Customer"))
+    {
     <div class="modal fade" id="cartModal" tabindex="-1" aria-labelledby="cartModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -324,8 +329,11 @@
             </div>
         </div>
     </div>
+    }
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    @if (User.IsInRole("Customer"))
+    {
     <script>
         (() => {
             const cartKey = "emarket-cart";
@@ -533,6 +541,7 @@
             renderCart();
         })();
     </script>
+    }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

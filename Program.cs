@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 builder.Services.AddSingleton<DataStore>();
 builder.Services.AddSingleton<SqlDataStore>();
+builder.Services.AddSingleton<ProductImageStorage>();
 builder.Services.AddSingleton<AccountService>();
 builder.Services.AddSingleton<IPasswordHasher<UserAccount>, PasswordHasher<UserAccount>>();
 builder.Services

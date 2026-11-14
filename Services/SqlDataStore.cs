@@ -22,6 +22,7 @@ public class SqlDataStore
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync();
         await EnsureAccountTableAsync(connection);
+        await EnsureProductImageColumnAsync(connection);
         await EnsureOrderCheckoutColumnsAsync(connection);
         await EnsureDebtOrderReferenceColumnAsync(connection);
         await EnsureVoucherTableAsync(connection);
@@ -35,6 +36,306 @@ public class SqlDataStore
         await ReconcileOrderTotalsAsync(connection);
         await MigrateLegacyEmployeePasswordsAsync(connection);
         await LoadAsync(connection, store);
+    }
+
+    private static async Task EnsureProductImageColumnAsync(SqlConnection connection)
+    {
+        await using var command = new SqlCommand(
+            """
+            IF COL_LENGTH(N'dbo.SanPham', N'HinhAnh') IS NULL
+                ALTER TABLE dbo.SanPham ADD HinhAnh NVARCHAR(500) NULL;
+            """, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task AddProductAsync(SanPham product, DataStore store)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using (var command = new SqlCommand(
+            """
+            INSERT INTO dbo.SanPham (MaSP, MaDanhMuc, TenSP, MoTa, GiaBan, HanSuDung, DonViTinh, HinhAnh)
+            VALUES (@MaSP, @MaDanhMuc, @TenSP, @MoTa, @GiaBan, @HanSuDung, @DonViTinh, @HinhAnh);
+            """, connection, transaction))
+        {
+            AddProductParameters(command, product);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var productInventories = await SetProductStockAsync(connection, transaction, product, product.SoLuongTon, store);
+        await transaction.CommitAsync();
+
+        product.TenDanhMuc = store.DanhMucs.FirstOrDefault(category => category.MaDanhMuc == product.MaDanhMuc)?.TenDanhMuc;
+        store.SanPhams.Add(product);
+        ReplaceProductInventory(store, product.MaSP, productInventories);
+    }
+
+    public async Task<bool> UpdateProductAsync(SanPham product, DataStore store)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using (var command = new SqlCommand(
+            """
+            UPDATE dbo.SanPham
+            SET MaDanhMuc = @MaDanhMuc,
+                TenSP = @TenSP,
+                MoTa = @MoTa,
+                GiaBan = @GiaBan,
+                HanSuDung = @HanSuDung,
+                DonViTinh = @DonViTinh,
+                HinhAnh = @HinhAnh
+            WHERE MaSP = @MaSP;
+            """, connection, transaction))
+        {
+            AddProductParameters(command, product);
+            if (await command.ExecuteNonQueryAsync() == 0)
+            {
+                await transaction.RollbackAsync();
+                return false;
+            }
+        }
+
+        var productInventories = await SetProductStockAsync(connection, transaction, product, product.SoLuongTon, store);
+        await transaction.CommitAsync();
+
+        var existing = store.SanPhams.FirstOrDefault(item => item.MaSP == product.MaSP);
+        if (existing != null)
+        {
+            existing.MaDanhMuc = product.MaDanhMuc;
+            existing.TenDanhMuc = store.DanhMucs.FirstOrDefault(category => category.MaDanhMuc == product.MaDanhMuc)?.TenDanhMuc;
+            existing.TenSP = product.TenSP;
+            existing.MoTa = product.MoTa;
+            existing.GiaBan = product.GiaBan;
+            existing.HanSuDung = product.HanSuDung;
+            existing.DonViTinh = product.DonViTinh;
+            existing.SoLuongTon = product.SoLuongTon;
+            existing.HinhAnh = product.HinhAnh;
+        }
+
+        ReplaceProductInventory(store, product.MaSP, productInventories);
+        return true;
+    }
+
+    public async Task<bool> DeleteProductAsync(string productId, DataStore store)
+    {
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        await using (var usageCommand = new SqlCommand(
+            """
+            SELECT CASE WHEN EXISTS (SELECT 1 FROM dbo.ChiTietDonHang WHERE MaSP = @MaSP)
+                          OR EXISTS (SELECT 1 FROM dbo.ChiTietPhieuNhap WHERE MaSP = @MaSP)
+                        THEN 1 ELSE 0 END;
+            """, connection, transaction))
+        {
+            usageCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = productId;
+            if ((int)(await usageCommand.ExecuteScalarAsync())! != 0)
+            {
+                throw new InvalidOperationException("Không thể xóa sản phẩm đã có trong đơn hàng hoặc phiếu nhập.");
+            }
+        }
+
+        await using (var cleanupCommand = new SqlCommand(
+            "DELETE FROM dbo.GioHang WHERE MaSP = @MaSP; DELETE FROM dbo.TonKho WHERE MaSP = @MaSP;",
+            connection, transaction))
+        {
+            cleanupCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = productId;
+            await cleanupCommand.ExecuteNonQueryAsync();
+        }
+
+        await using (var deleteCommand = new SqlCommand(
+            "DELETE FROM dbo.SanPham WHERE MaSP = @MaSP;", connection, transaction))
+        {
+            deleteCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = productId;
+            if (await deleteCommand.ExecuteNonQueryAsync() == 0)
+            {
+                await transaction.RollbackAsync();
+                return false;
+            }
+        }
+
+        await transaction.CommitAsync();
+        store.SanPhams.RemoveAll(product => product.MaSP == productId);
+        store.TonKhos.RemoveAll(inventory => inventory.MaSP == productId);
+        return true;
+    }
+
+    private static void AddProductParameters(SqlCommand command, SanPham product)
+    {
+        command.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = product.MaSP;
+        command.Parameters.Add("@MaDanhMuc", SqlDbType.VarChar, 50).Value = (object?)product.MaDanhMuc ?? DBNull.Value;
+        command.Parameters.Add("@TenSP", SqlDbType.NVarChar, 100).Value = product.TenSP;
+        command.Parameters.Add("@MoTa", SqlDbType.NVarChar, 255).Value = (object?)product.MoTa ?? DBNull.Value;
+        command.Parameters.Add("@GiaBan", SqlDbType.Decimal).Value = product.GiaBan;
+        command.Parameters["@GiaBan"].Precision = 18;
+        command.Parameters["@GiaBan"].Scale = 2;
+        command.Parameters.Add("@HanSuDung", SqlDbType.Date).Value = (object?)product.HanSuDung ?? DBNull.Value;
+        command.Parameters.Add("@DonViTinh", SqlDbType.NVarChar, 50).Value = (object?)product.DonViTinh ?? DBNull.Value;
+        command.Parameters.Add("@HinhAnh", SqlDbType.NVarChar, 500).Value = (object?)product.HinhAnh ?? DBNull.Value;
+    }
+
+    private static async Task<List<TonKho>> SetProductStockAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        SanPham product,
+        int desiredStock,
+        DataStore store)
+    {
+        var inventories = new List<TonKho>();
+        await using (var command = new SqlCommand(
+            """
+            SELECT tk.MaKho, tk.MaSP, tk.SoLuongTon, tk.SoLuongDaBan, tk.MucToiThieu, tk.MucToiDa,
+                   k.TenKho,
+                   CASE WHEN tk.SoLuongTon < tk.MucToiThieu THEN N'Dưới tối thiểu'
+                        WHEN tk.SoLuongTon > tk.MucToiDa THEN N'Vượt tối đa'
+                        ELSE N'Bình thường' END AS TrangThaiCanhBao
+            FROM dbo.TonKho AS tk WITH (UPDLOCK, HOLDLOCK)
+            LEFT JOIN dbo.Kho AS k ON k.MaKho = tk.MaKho
+            WHERE tk.MaSP = @MaSP
+            ORDER BY tk.MaKho;
+            """, connection, transaction))
+        {
+            command.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = product.MaSP;
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                inventories.Add(new TonKho
+                {
+                    MaKho = Text(reader, "MaKho") ?? string.Empty,
+                    MaSP = Text(reader, "MaSP") ?? string.Empty,
+                    SoLuongTon = Number(reader, "SoLuongTon"),
+                    SoLuongDaBan = Number(reader, "SoLuongDaBan"),
+                    MucToiThieu = Number(reader, "MucToiThieu"),
+                    MucToiDa = Number(reader, "MucToiDa"),
+                    TenKho = Text(reader, "TenKho"),
+                    TenSP = product.TenSP,
+                    DonViTinh = product.DonViTinh,
+                    TrangThaiCanhBao = Text(reader, "TrangThaiCanhBao")
+                });
+            }
+        }
+
+        var currentStock = inventories.Sum(inventory => (long)inventory.SoLuongTon);
+        if (desiredStock > currentStock)
+        {
+            var increase = checked((int)(desiredStock - currentStock));
+            if (inventories.Count > 0)
+            {
+                var inventory = inventories[0];
+                await using var command = new SqlCommand(
+                    "UPDATE dbo.TonKho SET SoLuongTon = SoLuongTon + @SoLuong WHERE MaKho = @MaKho AND MaSP = @MaSP;",
+                    connection, transaction);
+                command.Parameters.Add("@SoLuong", SqlDbType.Int).Value = increase;
+                command.Parameters.Add("@MaKho", SqlDbType.VarChar, 50).Value = inventory.MaKho;
+                command.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = product.MaSP;
+                if (await command.ExecuteNonQueryAsync() != 1)
+                {
+                    throw new InvalidOperationException("Không thể cập nhật tồn kho sản phẩm. Vui lòng tải lại trang và thử lại.");
+                }
+
+                inventory.SoLuongTon += increase;
+                UpdateInventoryStatus(inventory);
+            }
+            else
+            {
+                string? warehouseId;
+                await using (var warehouseCommand = new SqlCommand(
+                    "SELECT TOP (1) MaKho FROM dbo.Kho ORDER BY MaKho;",
+                    connection, transaction))
+                {
+                    warehouseId = (string?)await warehouseCommand.ExecuteScalarAsync();
+                }
+
+                if (warehouseId == null)
+                {
+                    throw new InvalidOperationException("Chưa có kho hàng để ghi nhận tồn kho sản phẩm.");
+                }
+
+                await using var command = new SqlCommand(
+                    """
+                    INSERT INTO dbo.TonKho (MaKho, MaSP, SoLuongTon, SoLuongDaBan, MucToiThieu, MucToiDa)
+                    VALUES (@MaKho, @MaSP, @SoLuongTon, 0, 20, 200);
+                    """, connection, transaction);
+                command.Parameters.Add("@MaKho", SqlDbType.VarChar, 50).Value = warehouseId;
+                command.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = product.MaSP;
+                command.Parameters.Add("@SoLuongTon", SqlDbType.Int).Value = desiredStock;
+                await command.ExecuteNonQueryAsync();
+                var warehouse = store.Khos.FirstOrDefault(item => item.MaKho == warehouseId);
+                var inventory = new TonKho
+                {
+                    MaKho = warehouseId,
+                    MaSP = product.MaSP,
+                    SoLuongTon = desiredStock,
+                    MucToiThieu = 20,
+                    MucToiDa = 200,
+                    TenKho = warehouse?.TenKho,
+                    TenSP = product.TenSP,
+                    DonViTinh = product.DonViTinh
+                };
+                UpdateInventoryStatus(inventory);
+                inventories.Add(inventory);
+            }
+        }
+        else if (desiredStock < currentStock)
+        {
+            var decreaseRemaining = currentStock - desiredStock;
+            foreach (var inventory in inventories)
+            {
+                if (decreaseRemaining == 0)
+                {
+                    break;
+                }
+
+                var decrease = (int)Math.Min(decreaseRemaining, inventory.SoLuongTon);
+                if (decrease <= 0)
+                {
+                    continue;
+                }
+
+                await using var command = new SqlCommand(
+                    """
+                    UPDATE dbo.TonKho
+                    SET SoLuongTon = SoLuongTon - @SoLuong
+                    WHERE MaKho = @MaKho AND MaSP = @MaSP AND SoLuongTon >= @SoLuong;
+                    """, connection, transaction);
+                command.Parameters.Add("@SoLuong", SqlDbType.Int).Value = decrease;
+                command.Parameters.Add("@MaKho", SqlDbType.VarChar, 50).Value = inventory.MaKho;
+                command.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = product.MaSP;
+                if (await command.ExecuteNonQueryAsync() != 1)
+                {
+                    throw new InvalidOperationException("Không thể cập nhật tồn kho sản phẩm. Vui lòng tải lại trang và thử lại.");
+                }
+
+                inventory.SoLuongTon -= decrease;
+                decreaseRemaining -= decrease;
+                UpdateInventoryStatus(inventory);
+            }
+
+            if (decreaseRemaining != 0)
+            {
+                throw new InvalidOperationException("Tồn kho đã thay đổi. Vui lòng tải lại trang và thử lại.");
+            }
+        }
+
+        return inventories;
+    }
+
+    private static void UpdateInventoryStatus(TonKho inventory)
+    {
+        inventory.TrangThaiCanhBao = inventory.SoLuongTon < inventory.MucToiThieu
+            ? "Dưới tối thiểu"
+            : inventory.SoLuongTon > inventory.MucToiDa
+                ? "Vượt tối đa"
+                : "Bình thường";
+    }
+
+    private static void ReplaceProductInventory(DataStore store, string productId, List<TonKho> inventories)
+    {
+        store.TonKhos.RemoveAll(inventory => inventory.MaSP == productId);
+        store.TonKhos.AddRange(inventories);
     }
 
     private static async Task EnsureOrderCheckoutColumnsAsync(SqlConnection connection)
@@ -809,7 +1110,7 @@ public class SqlDataStore
         return null;
     }
 
-    public async Task<string?> SaveImportAsync(PhieuNhap import)
+    public async Task<string?> SaveImportAsync(PhieuNhap import, DateTime? hanSuDung)
     {
         var line = import.ChiTiet.Single();
         await using var connection = new SqlConnection(_connectionString);
@@ -860,6 +1161,19 @@ public class SqlDataStore
             inventoryCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
             inventoryCommand.Parameters.Add("@SoLuong", SqlDbType.Int).Value = line.SoLuong;
             await inventoryCommand.ExecuteNonQueryAsync();
+        }
+
+        if (hanSuDung.HasValue)
+        {
+            await using var expiryCommand = new SqlCommand(
+                "UPDATE dbo.SanPham SET HanSuDung = @HanSuDung WHERE MaSP = @MaSP;",
+                connection, transaction);
+            expiryCommand.Parameters.Add("@HanSuDung", SqlDbType.Date).Value = hanSuDung.Value.Date;
+            expiryCommand.Parameters.Add("@MaSP", SqlDbType.VarChar, 50).Value = line.MaSP;
+            if (await expiryCommand.ExecuteNonQueryAsync() != 1)
+            {
+                throw new InvalidOperationException("Không tìm thấy sản phẩm để cập nhật hạn sử dụng.");
+            }
         }
 
         await transaction.CommitAsync();
@@ -1271,7 +1585,7 @@ public class SqlDataStore
             });
         var products = await ReadAsync(connection,
             """
-            SELECT sp.MaSP, sp.MaDanhMuc, sp.TenSP, sp.MoTa, sp.GiaBan, sp.HanSuDung, sp.DonViTinh,
+            SELECT sp.MaSP, sp.MaDanhMuc, sp.TenSP, sp.MoTa, sp.GiaBan, sp.HanSuDung, sp.DonViTinh, sp.HinhAnh,
                    dm.TenDanhMuc, COALESCE(kho.SoLuongTon, 0) AS SoLuongTon
             FROM dbo.SanPham sp
             LEFT JOIN dbo.DanhMuc dm ON dm.MaDanhMuc = sp.MaDanhMuc
@@ -1286,6 +1600,7 @@ public class SqlDataStore
                 GiaBan = Amount(r, "GiaBan"),
                 HanSuDung = Date(r, "HanSuDung"),
                 DonViTinh = Text(r, "DonViTinh"),
+                HinhAnh = Text(r, "HinhAnh"),
                 TenDanhMuc = Text(r, "TenDanhMuc"),
                 SoLuongTon = Number(r, "SoLuongTon")
             });

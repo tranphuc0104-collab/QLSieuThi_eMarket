@@ -28,7 +28,7 @@ public class AccountService
 
         await using (var command = new SqlCommand(
             """
-            SELECT a.TenDangNhap, a.MatKhauHash, a.VaiTro,
+            SELECT a.TenDangNhap, a.MatKhauHash, a.VaiTro, a.MaNV,
                    COALESCE(kh.HoTen, nv.HoTen, a.TenDangNhap) AS HoTen,
                    a.MaKhachHang
             FROM dbo.TaiKhoan a
@@ -45,9 +45,9 @@ public class AccountService
                 {
                     UserName = reader.GetString(0),
                     PasswordHash = reader.GetString(1),
-                    Role = reader.GetString(2),
-                    DisplayName = reader.GetString(3),
-                    CustomerId = reader.IsDBNull(4) ? null : reader.GetString(4)
+                    Role = reader.IsDBNull(3) ? reader.GetString(2) : "Admin",
+                    DisplayName = reader.GetString(4),
+                    CustomerId = reader.IsDBNull(3) && !reader.IsDBNull(5) ? reader.GetString(5) : null
                 };
                 var verification = _passwordHasher.VerifyHashedPassword(account, account.PasswordHash, password);
                 return verification == PasswordVerificationResult.Failed ? null : account;

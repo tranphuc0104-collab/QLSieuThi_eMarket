@@ -36,7 +36,14 @@ namespace EMarket.Controllers
             ViewBag.AllOrders = orders;
             if (string.IsNullOrWhiteSpace(maDonHang))
             {
-                return View(null);
+                var latestOrder = orders.FirstOrDefault();
+                if (latestOrder == null)
+                {
+                    return View(null);
+                }
+
+                ViewBag.SearchCode = latestOrder.MaDonHang;
+                return View(latestOrder);
             }
 
             var order = orders.FirstOrDefault(d =>
@@ -286,11 +293,12 @@ namespace EMarket.Controllers
         // 4. UC4: QUẢN LÝ BÁN HÀNG (Nhân viên)
         // ==========================================
         [Authorize(Roles = "Admin")]
-        public IActionResult BanHang()
+        public IActionResult BanHang(string? maSP)
         {
             ViewBag.KhachHangs = _db.KhachHangs.ToList();
             ViewBag.SanPhams = _db.SanPhams.ToList();
             ViewBag.RecentOrders = _db.DonHangs.OrderByDescending(d => d.NgayDat).Take(5).ToList();
+            ViewBag.SelectedProductId = maSP;
             return View();
         }
 
@@ -306,22 +314,199 @@ namespace EMarket.Controllers
         }
 
         [Authorize(Roles = "Admin")]
-        public IActionResult XuLyDonHang(string? trangThai, string? maDonHang)
+        public IActionResult BaoCao(
+            string? kyBaoCao,
+            DateTime? ngay,
+            int? thang,
+            int? nam,
+            DateTime? tuNgay,
+            DateTime? denNgay,
+            string? maSP,
+            string? maNCC)
         {
-            ViewBag.SelectedStatus = trangThai;
-            ViewBag.SearchCode = maDonHang;
-            IEnumerable<DonHang> orders = _db.DonHangs.OrderByDescending(order => order.NgayDat);
-            if (!string.IsNullOrWhiteSpace(trangThai))
+            var today = DateTime.Today;
+            kyBaoCao = kyBaoCao?.ToLowerInvariant() switch
             {
-                orders = orders.Where(order => order.TrangThai == trangThai);
+                "ngay" => "ngay",
+                "nam" => "nam",
+                "tuychon" => "tuychon",
+                _ => "thang"
+            };
+            var selectedYear = nam is >= 1 and <= 9998 ? nam.Value : today.Year;
+            var selectedMonth = thang is >= 1 and <= 12 ? thang.Value : today.Month;
+            DateTime startDate;
+            DateTime endDate;
+
+            switch (kyBaoCao)
+            {
+                case "ngay":
+                    startDate = (ngay ?? today).Date;
+                    endDate = startDate;
+                    break;
+                case "nam":
+                    startDate = new DateTime(selectedYear, 1, 1);
+                    endDate = new DateTime(selectedYear, 12, 31);
+                    break;
+                case "tuychon":
+                    startDate = (tuNgay ?? new DateTime(today.Year, today.Month, 1)).Date;
+                    endDate = (denNgay ?? today).Date;
+                    if (startDate > endDate)
+                    {
+                        ModelState.AddModelError(string.Empty, "Từ ngày không được sau đến ngày.");
+                        (startDate, endDate) = (endDate, startDate);
+                    }
+                    break;
+                default:
+                    startDate = new DateTime(selectedYear, selectedMonth, 1);
+                    endDate = startDate.AddMonths(1).AddDays(-1);
+                    break;
             }
 
-            if (!string.IsNullOrWhiteSpace(maDonHang))
+            maSP = string.IsNullOrWhiteSpace(maSP) ? null : maSP.Trim();
+            maNCC = string.IsNullOrWhiteSpace(maNCC) ? null : maNCC.Trim();
+            var report = new BaoCaoViewModel
             {
-                orders = orders.Where(order => order.MaDonHang.Contains(maDonHang.Trim(), StringComparison.OrdinalIgnoreCase));
+                KyBaoCao = kyBaoCao,
+                TuNgay = startDate,
+                DenNgay = endDate,
+                MaSP = maSP,
+                MaNCC = maNCC,
+                SanPhams = _db.SanPhams.OrderBy(product => product.TenSP).ToList(),
+                NhaCungCaps = _db.NhaCungCaps.OrderBy(supplier => supplier.TenNCC).ToList()
+            };
+
+            var salesByProduct = new Dictionary<string, BaoCaoMatHangViewModel>();
+            var suppliersById = new Dictionary<string, BaoCaoNhaCungCapViewModel>();
+            var timeline = new Dictionary<DateTime, BaoCaoThoiGianViewModel>();
+            var useMonthlyTimeline = kyBaoCao == "nam" || endDate.Subtract(startDate).TotalDays > 62;
+            DateTime GetTimelineKey(DateTime date) => useMonthlyTimeline
+                ? new DateTime(date.Year, date.Month, 1)
+                : date.Date;
+            BaoCaoThoiGianViewModel GetTimeline(DateTime date)
+            {
+                var key = GetTimelineKey(date);
+                if (!timeline.TryGetValue(key, out var row))
+                {
+                    row = new BaoCaoThoiGianViewModel { MocThoiGian = key };
+                    timeline.Add(key, row);
+                }
+
+                return row;
+            }
+            BaoCaoMatHangViewModel GetProductRow(string productId, string? productName)
+            {
+                if (!salesByProduct.TryGetValue(productId, out var row))
+                {
+                    row = new BaoCaoMatHangViewModel
+                    {
+                        MaSP = productId,
+                        TenSP = _db.SanPhams.FirstOrDefault(product => product.MaSP == productId)?.TenSP
+                            ?? productName
+                            ?? productId
+                    };
+                    salesByProduct.Add(productId, row);
+                }
+
+                return row;
             }
 
-            return View(orders.ToList());
+            var salesOrders = _db.DonHangs
+                .Where(order => order.NgayDat.HasValue &&
+                    order.NgayDat.Value.Date >= startDate &&
+                    order.NgayDat.Value.Date <= endDate &&
+                    order.TrangThai is "Đã hoàn tất" or "Đã giao" or "Đã nhận");
+            if (maSP != null)
+            {
+                salesOrders = salesOrders.Where(order => order.ChiTiet.Any(line => line.MaSP == maSP));
+            }
+
+            foreach (var order in salesOrders)
+            {
+                var orderDate = order.NgayDat!.Value;
+                var totalLineAmount = order.ChiTiet.Sum(line => line.ThanhTien);
+                var discountFactor = totalLineAmount > 0 ? order.TongTien / totalLineAmount : 1m;
+                var matchingLines = order.ChiTiet.Where(line => maSP == null || line.MaSP == maSP).ToList();
+                var orderRevenue = totalLineAmount > 0
+                    ? matchingLines.Sum(line => line.ThanhTien * discountFactor)
+                    : maSP == null ? order.TongTien : 0m;
+
+                report.SoDonBan++;
+                report.DoanhThu += orderRevenue;
+                report.SoLuongBan += matchingLines.Sum(line => line.SoLuong);
+
+                if (matchingLines.Count == 0)
+                {
+                    GetTimeline(orderDate).DoanhThu += orderRevenue;
+                    continue;
+                }
+
+                foreach (var line in matchingLines)
+                {
+                    var allocatedRevenue = line.ThanhTien * discountFactor;
+                    var productRow = GetProductRow(line.MaSP, line.TenSP);
+                    productRow.SoLuongBan += line.SoLuong;
+                    productRow.DoanhThu += allocatedRevenue;
+                    GetTimeline(orderDate).DoanhThu += allocatedRevenue;
+                }
+            }
+
+            var purchaseCount = 0;
+            foreach (var import in _db.PhieuNhaps.Where(import =>
+                         import.NgayNhap.HasValue &&
+                         import.NgayNhap.Value.Date >= startDate &&
+                         import.NgayNhap.Value.Date <= endDate &&
+                         (maNCC == null || import.MaNCC == maNCC)))
+            {
+                var matchingLines = import.ChiTiet
+                    .Where(line => maSP == null || line.MaSP == maSP)
+                    .ToList();
+                if (matchingLines.Count == 0)
+                {
+                    continue;
+                }
+
+                purchaseCount++;
+                var supplierId = import.MaNCC ?? string.Empty;
+                if (!suppliersById.TryGetValue(supplierId, out var supplierRow))
+                {
+                    supplierRow = new BaoCaoNhaCungCapViewModel
+                    {
+                        MaNCC = supplierId,
+                        TenNCC = _db.NhaCungCaps.FirstOrDefault(supplier => supplier.MaNCC == supplierId)?.TenNCC
+                            ?? import.TenNCC
+                            ?? "Chưa xác định"
+                    };
+                    suppliersById.Add(supplierId, supplierRow);
+                }
+
+                supplierRow.SoPhieuNhap++;
+                foreach (var line in matchingLines)
+                {
+                    report.SoLuongNhap += line.SoLuong;
+                    report.TienNhap += line.ThanhTien;
+                    supplierRow.SoLuongNhap += line.SoLuong;
+                    supplierRow.TienNhap += line.ThanhTien;
+                    var productRow = GetProductRow(line.MaSP, line.TenSP);
+                    productRow.SoLuongNhap += line.SoLuong;
+                    productRow.TienNhap += line.ThanhTien;
+                    GetTimeline(import.NgayNhap!.Value).TienNhap += line.ThanhTien;
+                }
+            }
+
+            report.SoPhieuNhap = purchaseCount;
+            report.MatHangs = salesByProduct.Values
+                .OrderByDescending(product => product.DoanhThu + product.TienNhap)
+                .ThenBy(product => product.TenSP)
+                .ToList();
+            report.NhaCungCapRows = suppliersById.Values
+                .OrderByDescending(supplier => supplier.TienNhap)
+                .ThenBy(supplier => supplier.TenNCC)
+                .ToList();
+            report.ThoiGianRows = timeline.Values
+                .OrderBy(row => row.MocThoiGian)
+                .ToList();
+
+            return View(report);
         }
 
         [Authorize(Roles = "Admin")]
@@ -334,7 +519,7 @@ namespace EMarket.Controllers
             if (order == null)
             {
                 TempData["Error"] = "Không tìm thấy đơn hàng cần cập nhật.";
-                return RedirectToAction(nameof(XuLyDonHang));
+                return RedirectToAction(nameof(HoaDon));
             }
 
             var nextStatus = order.TrangThai switch
@@ -347,18 +532,18 @@ namespace EMarket.Controllers
             if (nextStatus == null || trangThaiMoi != nextStatus)
             {
                 TempData["Error"] = "Đơn hàng chỉ được chuyển sang bước tiếp theo trong quy trình xử lý.";
-                return RedirectToAction(nameof(XuLyDonHang), new { trangThai = order.TrangThai });
+                return RedirectToAction(nameof(HoaDon), new { maDonHang = order.MaDonHang });
             }
 
             if (!await _sqlDataStore.UpdateOrderStatusAsync(order.MaDonHang, order.TrangThai!, trangThaiMoi))
             {
                 TempData["Error"] = "Đơn hàng vừa được cập nhật ở nơi khác. Hãy tải lại danh sách trước khi xử lý tiếp.";
-                return RedirectToAction(nameof(XuLyDonHang));
+                return RedirectToAction(nameof(HoaDon), new { maDonHang = order.MaDonHang });
             }
 
             order.TrangThai = trangThaiMoi;
             TempData["Success"] = $"Đơn hàng '{order.MaDonHang}' đã chuyển sang trạng thái '{trangThaiMoi}'.";
-            return RedirectToAction(nameof(XuLyDonHang), new { trangThai = trangThaiMoi });
+            return RedirectToAction(nameof(HoaDon), new { maDonHang = order.MaDonHang });
         }
 
         [Authorize(Roles = "Admin")]
@@ -799,16 +984,23 @@ namespace EMarket.Controllers
         [Authorize(Roles = "Admin")]
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> TaoPhieuNhap(string maNCC, string maKho, string maSP, int soLuong, decimal donGiaNhap)
+        public async Task<IActionResult> TaoPhieuNhap(
+            string maNCC,
+            string maKho,
+            string maSP,
+            int soLuong,
+            decimal donGiaNhap,
+            DateTime? hanSuDung)
         {
             ViewBag.NhaCungCaps = _db.NhaCungCaps.ToList();
             ViewBag.Khos = _db.Khos.ToList();
             ViewBag.SanPhams = _db.SanPhams.ToList();
             ViewBag.RecentImports = _db.PhieuNhaps.OrderByDescending(p => p.NgayNhap).Take(5).ToList();
 
-            if (string.IsNullOrEmpty(maNCC) || string.IsNullOrEmpty(maKho) || string.IsNullOrEmpty(maSP) || soLuong <= 0 || donGiaNhap <= 0)
+            if (string.IsNullOrEmpty(maNCC) || string.IsNullOrEmpty(maKho) || string.IsNullOrEmpty(maSP) ||
+                soLuong <= 0 || donGiaNhap <= 0 || (hanSuDung.HasValue && hanSuDung.Value.Date < DateTime.Today))
             {
-                ViewBag.Error = "Thông tin không hợp lệ! Vui lòng nhập đầy đủ Nhà cung cấp, Kho nhập, Sản phẩm, Số lượng > 0 và Đơn giá > 0.";
+                ViewBag.Error = "Thông tin không hợp lệ! Vui lòng nhập đầy đủ Nhà cung cấp, Kho, Sản phẩm, Số lượng, Đơn giá và hạn sử dụng không nằm trong quá khứ.";
                 return View("NhapHang");
             }
 
@@ -848,12 +1040,16 @@ namespace EMarket.Controllers
                 }
             };
 
-            await _sqlDataStore.SaveImportAsync(phieuNhap);
+            await _sqlDataStore.SaveImportAsync(phieuNhap, hanSuDung);
 
             // Cập nhật tồn kho
             if (sp != null)
             {
                 sp.SoLuongTon += soLuong;
+                if (hanSuDung.HasValue)
+                {
+                    sp.HanSuDung = hanSuDung.Value.Date;
+                }
             }
 
             var tk = _db.TonKhos.FirstOrDefault(t => t.MaKho == maKho && t.MaSP == maSP);

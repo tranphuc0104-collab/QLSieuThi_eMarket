@@ -5,6 +5,7 @@
     var recentOrders = ViewBag.RecentOrders as List<EMarket.Models.DonHang>;
     var success = ViewBag.Success as string;
     var error = ViewBag.Error as string;
+    var selectedProductId = ViewBag.SelectedProductId as string;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -14,9 +15,6 @@
         <p class="text-muted small">Lập hóa đơn nhiều sản phẩm, cập nhật tồn kho và tích điểm thành viên.</p>
     </div>
     <div class="d-flex gap-2 align-items-center">
-        <span class="badge bg-light text-dark border p-2">
-            <i class="bi bi-person-badge text-primary me-1"></i> Nhân viên: <strong>Hoàng Ngọc Hà (NV02)</strong>
-        </span>
         <a asp-action="HoaDon" class="btn btn-outline-primary"><i class="bi bi-receipt me-1"></i>Quản lý hóa đơn</a>
     </div>
 </div>
@@ -69,7 +67,7 @@
                                     {
                                         foreach (var sp in sanPhams)
                                         {
-                                            <option value="@sp.MaSP" data-base-price="@sp.GiaBan" data-stock="@sp.SoLuongTon" data-unit="@sp.DonViTinh">
+                                            <option value="@sp.MaSP" selected="@(selectedProductId == sp.MaSP ? "selected" : null)" data-base-price="@sp.GiaBan" data-stock="@sp.SoLuongTon" data-unit="@sp.DonViTinh">
                                                 @sp.TenSP (Tồn: @sp.SoLuongTon @sp.DonViTinh) - @sp.GiaBan.ToString("N0") đ
                                             </option>
                                         }

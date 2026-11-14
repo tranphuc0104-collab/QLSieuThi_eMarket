@@ -130,9 +130,18 @@
                                     }
                                 </td>
                                 <td class="text-center">
-                                    <a asp-action="DatHang" class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-cart-plus"></i> Đặt mua
-                                    </a>
+                                    @if (User.IsInRole("Admin"))
+                                    {
+                                        <a asp-action="BanHang" asp-route-maSP="@sp.MaSP" class="btn btn-sm btn-outline-success">
+                                            <i class="bi bi-receipt"></i> Lập đơn bán
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a asp-action="DatHang" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-cart-plus"></i> Đặt mua
+                                        </a>
+                                    }
                                 </td>
                             </tr>
                         }

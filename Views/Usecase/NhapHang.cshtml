@@ -13,11 +13,6 @@
         <h3 class="fw-bold mb-0">Quản Lý Nhập Hàng Vào Kho</h3>
         <p class="text-muted small">Nhân viên kho tiếp nhận hàng, lập phiếu nhập, tự động cộng dồn số lượng tồn kho theo từng kho lưu trữ.</p>
     </div>
-    <div>
-        <span class="badge bg-light text-dark border p-2">
-            <i class="bi bi-person-gear text-warning me-1"></i> Thủ kho: <strong>Văn Trần Tuấn Khải (NV03)</strong>
-        </span>
-    </div>
 </div>
 
 @if (!string.IsNullOrEmpty(success))
@@ -87,12 +82,12 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">3. Hàng Hóa tiếp nhận: <span class="text-danger">*</span></label>
                         <select name="maSP" id="selectNhapSP" class="form-select" required onchange="calcImportTotal()">
-                            <option value="" data-unit="">-- Chọn sản phẩm nhập lô --</option>
+                            <option value="" data-unit="" data-expiry="">-- Chọn sản phẩm nhập lô --</option>
                             @if (sanPhams != null)
                             {
                                 foreach (var sp in sanPhams)
                                 {
-                                    <option value="@sp.MaSP" data-unit="@sp.DonViTinh">
+                                    <option value="@sp.MaSP" data-unit="@sp.DonViTinh" data-expiry="@sp.HanSuDung?.ToString("yyyy-MM-dd")">
                                         @sp.MaSP - @sp.TenSP (ĐVT: @sp.DonViTinh - Tồn hiện tại: @sp.SoLuongTon)
                                     </option>
                                 }
@@ -112,6 +107,12 @@
                             <label class="form-label fw-semibold">5. Đơn giá nhập (VNĐ / ĐVT): <span class="text-danger">*</span></label>
                             <input type="number" id="donGiaNhap" name="donGiaNhap" class="form-control" min="1000" step="500" value="25000" required oninput="calcImportTotal()" />
                         </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="hanSuDung" class="form-label fw-semibold">6. Hạn sử dụng của lô hàng mới</label>
+                        <input type="date" id="hanSuDung" name="hanSuDung" class="form-control" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                        <div class="form-text">Nếu nhập ngày, hạn sử dụng này sẽ cập nhật cho sản phẩm và hiển thị trong tra cứu hàng hóa. Để trống để giữ nguyên hạn hiện tại.</div>
                     </div>
 
                     <!-- Tóm tắt phiếu nhập -->
@@ -150,9 +151,6 @@
                                 </div>
                                 <div class="small text-muted">NCC: @pn.TenNCC</div>
                                 <div class="small text-muted">Kho: @pn.TenKho | @pn.NgayNhap?.ToString("dd/MM/yyyy HH:mm")</div>
-                                <div class="mt-1">
-                                    <span class="badge bg-light text-dark border">Thủ kho: @pn.MaNV</span>
-                                </div>
                             </div>
                         }
                     }
@@ -164,6 +162,12 @@
 
 @section Scripts {
 <script>
+    const importProductSelect = document.getElementById("selectNhapSP");
+    const expiryInput = document.getElementById("hanSuDung");
+    importProductSelect.addEventListener("change", function () {
+        expiryInput.value = this.selectedOptions[0]?.dataset.expiry || "";
+    });
+
     function calcImportTotal() {
         const qty = parseInt(document.getElementById("soLuongNhap").value) || 0;
         const price = parseFloat(document.getElementById("donGiaNhap").value) || 0;

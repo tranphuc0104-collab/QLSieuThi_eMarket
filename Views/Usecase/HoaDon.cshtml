@@ -9,7 +9,7 @@
     <div>
         <span class="badge bg-success mb-1">Bán hàng</span>
         <h3 class="fw-bold mb-0">Quản Lý Hóa Đơn</h3>
-        <p class="text-muted small">Tra cứu hóa đơn đã lập và xem các sản phẩm trong từng hóa đơn.</p>
+        <p class="text-muted small">Tra cứu hóa đơn, xem chi tiết và cập nhật trạng thái đơn hàng.</p>
     </div>
     <a asp-action="BanHang" class="btn btn-success"><i class="bi bi-plus-circle me-1"></i>Lập hóa đơn</a>
 </div>
@@ -35,6 +35,7 @@
                             <th>Mã hóa đơn</th>
                             <th>Khách hàng</th>
                             <th>Ngày lập</th>
+                            <th>Trạng thái</th>
                             <th class="text-end">Tổng tiền</th>
                             <th></th>
                         </tr>
@@ -44,10 +45,20 @@
                         {
                             foreach (var order in Model)
                             {
+                                var statusBadgeClass = order.TrangThai switch
+                                {
+                                    "Đã hoàn tất" or "Đã giao" or "Đã nhận" => "bg-success",
+                                    "Đang giao" => "bg-info text-dark",
+                                    "Đang chuẩn bị" => "bg-primary",
+                                    "Đang xử lý" or "Chờ xác nhận" => "bg-warning text-dark",
+                                    "Đã hủy" or "Đã hủy đơn" => "bg-danger",
+                                    _ => "bg-secondary"
+                                };
                                 <tr class="@(selectedOrder?.MaDonHang == order.MaDonHang ? "table-primary" : "")">
                                     <td><code>@order.MaDonHang</code></td>
                                     <td>@order.TenKhachHang</td>
                                     <td>@order.NgayDat?.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td><span class="badge @statusBadgeClass">@order.TrangThai</span></td>
                                     <td class="text-end fw-semibold">@order.TongTien.ToString("N0") đ</td>
                                     <td class="text-end">
                                         <a asp-action="HoaDon" asp-route-maDonHang="@order.MaDonHang" class="btn btn-sm btn-outline-primary">Chi tiết</a>
@@ -57,7 +68,7 @@
                         }
                         else
                         {
-                            <tr><td colspan="5" class="text-center text-muted py-4">Không tìm thấy hóa đơn.</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted py-4">Không tìm thấy hóa đơn.</td></tr>
                         }
                     </tbody>
                 </table>
@@ -69,6 +80,22 @@
         @if (selectedOrder != null)
         {
             var subtotal = selectedOrder.ChiTiet.Sum(line => line.ThanhTien);
+            var nextStatus = selectedOrder.TrangThai switch
+            {
+                "Đang xử lý" => "Đang chuẩn bị",
+                "Đang chuẩn bị" => "Đang giao",
+                "Đang giao" => "Đã hoàn tất",
+                _ => null
+            };
+            var selectedStatusBadgeClass = selectedOrder.TrangThai switch
+            {
+                "Đã hoàn tất" or "Đã giao" or "Đã nhận" => "bg-success",
+                "Đang giao" => "bg-info text-dark",
+                "Đang chuẩn bị" => "bg-primary",
+                "Đang xử lý" or "Chờ xác nhận" => "bg-warning text-dark",
+                "Đã hủy" or "Đã hủy đơn" => "bg-danger",
+                _ => "bg-secondary"
+            };
             <div class="card">
                 <div class="card-header bg-primary text-white">
                     <div class="fw-bold">Chi tiết hóa đơn</div>
@@ -86,7 +113,37 @@
                         {
                             <div><strong>Thanh toán:</strong> @selectedOrder.PhuongThucThanhToan</div>
                         }
-                        <div><strong>Nhân viên:</strong> @selectedOrder.MaNV</div>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 p-3 bg-light rounded">
+                        <div>
+                            <strong>Trạng thái đơn hàng:</strong>
+                            <span class="badge @selectedStatusBadgeClass ms-1">@selectedOrder.TrangThai</span>
+                        </div>
+                        @if (nextStatus != null)
+                        {
+                            <form method="post" asp-action="CapNhatTrangThaiDonHang" class="m-0">
+                                <input type="hidden" name="maDonHang" value="@selectedOrder.MaDonHang" />
+                                <input type="hidden" name="trangThaiMoi" value="@nextStatus" />
+                                <button type="submit" class="btn btn-sm btn-success">
+                                    @if (selectedOrder.TrangThai == "Đang xử lý")
+                                    {
+                                        <i class="bi bi-box-seam me-1"></i><span>Xác nhận & chuẩn bị hàng</span>
+                                    }
+                                    else if (selectedOrder.TrangThai == "Đang chuẩn bị")
+                                    {
+                                        <i class="bi bi-truck me-1"></i><span>Bàn giao vận chuyển</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-check-circle me-1"></i><span>Xác nhận hoàn tất</span>
+                                    }
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="text-success fw-semibold"><i class="bi bi-check-circle-fill me-1"></i>Đơn hàng đã hoàn tất</span>
+                        }
                     </div>
                     <div class="table-responsive">
                         <table class="table table-sm align-middle">

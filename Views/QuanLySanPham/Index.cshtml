@@ -1,0 +1,102 @@
+@model List<EMarket.Models.SanPham>
+@{
+    ViewData["Title"] = "Quản lý sản phẩm";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 fw-bold mb-1">Quản lý sản phẩm</h1>
+        <p class="text-secondary mb-0">Thêm, cập nhật thông tin và hình ảnh sản phẩm hiển thị trên trang bán hàng.</p>
+    </div>
+    <a asp-action="Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Thêm sản phẩm
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Ảnh</th>
+                    <th>Mã sản phẩm</th>
+                    <th>Tên sản phẩm</th>
+                    <th>Danh mục</th>
+                    <th>Mô tả</th>
+                    <th class="text-end">Giá bán hiện tại</th>
+                    <th class="text-center">Hạn sử dụng</th>
+                    <th class="text-center">ĐVT</th>
+                    <th class="text-end">Tồn kho</th>
+                    <th class="text-end">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var product in Model)
+                {
+                    var daysUntilExpiry = product.HanSuDung.HasValue
+                        ? (product.HanSuDung.Value.Date - DateTime.Today).Days
+                        : (int?)null;
+                    var expiryBadgeClass = daysUntilExpiry switch
+                    {
+                        null => "bg-secondary",
+                        <= 0 => "bg-danger",
+                        <= 7 => "bg-warning text-dark",
+                        _ => "bg-success"
+                    };
+                    var stockBadgeClass = product.SoLuongTon switch
+                    {
+                        <= 0 => "bg-danger",
+                        <= 20 => "bg-warning text-dark",
+                        _ => "bg-success"
+                    };
+                    <tr>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(product.HinhAnh))
+                            {
+                                <img src="@product.HinhAnh" alt="@product.TenSP" class="rounded border" style="width: 56px; height: 56px; object-fit: cover;" />
+                            }
+                            else
+                            {
+                                <span class="d-inline-flex rounded border bg-light text-secondary align-items-center justify-content-center" style="width: 56px; height: 56px;">
+                                    <i class="bi bi-image"></i>
+                                </span>
+                            }
+                        </td>
+                        <td class="fw-semibold">@product.MaSP</td>
+                        <td>@product.TenSP</td>
+                        <td>@(product.TenDanhMuc ?? "Chưa phân loại")</td>
+                        <td>@(product.MoTa ?? "—")</td>
+                        <td class="text-end">@product.GiaBan.ToString("N0") đ</td>
+                        <td class="text-center">
+                            @if (daysUntilExpiry.HasValue)
+                            {
+                                <span class="badge @expiryBadgeClass">
+                                    @(daysUntilExpiry <= 0 ? "Đã hết hạn" : daysUntilExpiry <= 7 ? $"Sắp hết hạn ({daysUntilExpiry} ngày)" : "Còn hạn")
+                                </span>
+                                <div class="small text-muted mt-1">@product.HanSuDung?.ToString("dd/MM/yyyy")</div>
+                            }
+                            else
+                            {
+                                <span class="badge @expiryBadgeClass">Chưa có hạn</span>
+                            }
+                        </td>
+                        <td class="text-center">@(product.DonViTinh ?? "—")</td>
+                        <td class="text-end"><span class="badge @stockBadgeClass">@product.SoLuongTon</span></td>
+                        <td class="text-end text-nowrap">
+                            <a asp-action="Edit" asp-route-id="@product.MaSP" class="btn btn-sm btn-outline-primary" aria-label="Sửa @product.TenSP">
+                                <i class="bi bi-pencil-square"></i>
+                            </a>
+                            <a asp-action="Delete" asp-route-id="@product.MaSP" class="btn btn-sm btn-outline-danger" aria-label="Xóa @product.TenSP">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                }
+                @if (Model.Count == 0)
+                {
+                    <tr><td colspan="10" class="text-center text-secondary py-5">Chưa có sản phẩm nào.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -19,19 +19,22 @@ public class CuaHangController : Controller
     [AllowAnonymous]
     public async Task<IActionResult> Index(string? keyword)
     {
-        var cartSessionId = GetOrCreateCartSessionId();
-        var savedCart = await _sqlDataStore.GetCartAsync(cartSessionId);
-        var initialCart = savedCart.Select(item =>
+        var initialCart = new List<object>();
+        if (User.IsInRole("Customer"))
         {
-            var product = _db.SanPhams.FirstOrDefault(candidate => candidate.MaSP == item.Key);
-            return product == null ? null : new
+            var savedCart = await _sqlDataStore.GetCartAsync(GetOrCreateCartSessionId());
+            initialCart = savedCart.Select(item =>
             {
-                id = item.Key,
-                name = product.TenSP,
-                price = product.GiaBan,
-                quantity = item.Value
-            };
-        }).Where(item => item != null).ToList();
+                var product = _db.SanPhams.FirstOrDefault(candidate => candidate.MaSP == item.Key);
+                return product == null ? null : new
+                {
+                    id = item.Key,
+                    name = product.TenSP,
+                    price = product.GiaBan,
+                    quantity = item.Value
+                };
+            }).Where(item => item != null).Cast<object>().ToList();
+        }
         ViewBag.InitialCartJson = System.Text.Json.JsonSerializer.Serialize(initialCart);
 
         var customerId = User.FindFirst("CustomerId")?.Value;
@@ -53,7 +56,7 @@ public class CuaHangController : Controller
         return View(products.ToList());
     }
 
-    [AllowAnonymous]
+    [Authorize(Roles = "Customer")]
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveCart([FromBody] Dictionary<string, int>? items)

@@ -1,0 +1,268 @@
+@model EMarket.Models.BaoCaoViewModel
+@{
+    ViewData["Title"] = "Thống kê - Báo cáo";
+    var monthNames = new[]
+    {
+        "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+        "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
+    };
+}
+
+<style>
+    .report-print-header { display: none; }
+
+    @@media print {
+        @@page { size: landscape; margin: 12mm; }
+        body { background: #fff !important; color: #000 !important; font-size: 10pt; }
+        .sidebar, .top-navbar, .report-filters, .report-actions, .alert, footer { display: none !important; }
+        .main-content { margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
+        .report-print-header { display: block !important; margin-bottom: 16px; }
+        .card { box-shadow: none !important; border: 1px solid #bbb !important; break-inside: avoid; }
+        .card-header { background: #f1f3f5 !important; color: #000 !important; }
+        .table { font-size: 9pt; }
+        .table > :not(caption) > * > * { padding: 5px 7px !important; }
+        .badge { color: #000 !important; background: #eee !important; border: 1px solid #aaa; }
+        .row { --bs-gutter-y: .75rem; }
+    }
+</style>
+
+<div class="report-print-header">
+    <h1 class="h3 fw-bold">BÁO CÁO THỐNG KÊ EMARKET</h1>
+    <div>Kỳ báo cáo: @Model.TuNgay.ToString("dd/MM/yyyy") – @Model.DenNgay.ToString("dd/MM/yyyy")</div>
+    <div>Mặt hàng: @(Model.SanPhams.FirstOrDefault(product => product.MaSP == Model.MaSP)?.TenSP ?? "Tất cả")</div>
+    <div>Nhà cung cấp: @(Model.NhaCungCaps.FirstOrDefault(supplier => supplier.MaNCC == Model.MaNCC)?.TenNCC ?? "Tất cả")</div>
+    <div>Ngày in: @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+</div>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h1 class="h3 fw-bold mb-1">Thống kê – Báo cáo</h1>
+        <p class="text-secondary mb-0">Tổng hợp bán hàng, mặt hàng, nhập hàng và nhà cung cấp theo kỳ.</p>
+    </div>
+    <div class="report-actions d-flex gap-2">
+        <button type="button" class="btn btn-outline-primary" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i>In báo cáo
+        </button>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4 report-filters">
+    <div class="card-body">
+        <form method="get" asp-action="BaoCao" class="row g-3 align-items-end" id="report-filter">
+            <div class="col-md-3">
+                <label for="kyBaoCao" class="form-label fw-semibold">Kỳ báo cáo</label>
+                <select id="kyBaoCao" name="kyBaoCao" class="form-select">
+                    <option value="ngay" selected="@(Model.KyBaoCao == "ngay" ? "selected" : null)">Theo ngày</option>
+                    <option value="thang" selected="@(Model.KyBaoCao == "thang" ? "selected" : null)">Theo tháng</option>
+                    <option value="nam" selected="@(Model.KyBaoCao == "nam" ? "selected" : null)">Theo năm</option>
+                    <option value="tuychon" selected="@(Model.KyBaoCao == "tuychon" ? "selected" : null)">Khoảng ngày tùy chọn</option>
+                </select>
+            </div>
+            <div class="col-md-2 period-field" data-period="ngay">
+                <label for="ngay" class="form-label fw-semibold">Ngày</label>
+                <input id="ngay" name="ngay" type="date" class="form-control" value="@(Model.KyBaoCao == "ngay" ? Model.TuNgay.ToString("yyyy-MM-dd") : "")" />
+            </div>
+            <div class="col-md-2 period-field" data-period="thang">
+                <label for="thang" class="form-label fw-semibold">Tháng</label>
+                <select id="thang" name="thang" class="form-select">
+                    @for (var index = 1; index <= 12; index++)
+                    {
+                        <option value="@index" selected="@(Model.KyBaoCao == "thang" && Model.TuNgay.Month == index ? "selected" : null)">@monthNames[index - 1]</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2 period-field" data-period="thang,nam">
+                <label for="nam" class="form-label fw-semibold">Năm</label>
+                <input id="nam" name="nam" type="number" min="1" max="9998" class="form-control" value="@Model.TuNgay.Year" />
+            </div>
+            <div class="col-md-2 period-field" data-period="tuychon">
+                <label for="tuNgay" class="form-label fw-semibold">Từ ngày</label>
+                <input id="tuNgay" name="tuNgay" type="date" class="form-control" value="@(Model.KyBaoCao == "tuychon" ? Model.TuNgay.ToString("yyyy-MM-dd") : "")" />
+            </div>
+            <div class="col-md-2 period-field" data-period="tuychon">
+                <label for="denNgay" class="form-label fw-semibold">Đến ngày</label>
+                <input id="denNgay" name="denNgay" type="date" class="form-control" value="@(Model.KyBaoCao == "tuychon" ? Model.DenNgay.ToString("yyyy-MM-dd") : "")" />
+            </div>
+            <div class="col-md-3">
+                <label for="maSP" class="form-label fw-semibold">Mặt hàng</label>
+                <select id="maSP" name="maSP" class="form-select">
+                    <option value="">Tất cả mặt hàng</option>
+                    @foreach (var product in Model.SanPhams)
+                    {
+                        <option value="@product.MaSP" selected="@(Model.MaSP == product.MaSP ? "selected" : null)">@product.TenSP (@product.MaSP)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="maNCC" class="form-label fw-semibold">Nhà cung cấp</label>
+                <select id="maNCC" name="maNCC" class="form-select">
+                    <option value="">Tất cả nhà cung cấp</option>
+                    @foreach (var supplier in Model.NhaCungCaps)
+                    {
+                        <option value="@supplier.MaNCC" selected="@(Model.MaNCC == supplier.MaNCC ? "selected" : null)">@supplier.TenNCC</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3 d-grid">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1"></i>Lọc báo cáo</button>
+            </div>
+        </form>
+        <div class="small text-muted mt-3">Lọc mặt hàng áp dụng cho cả bán hàng và nhập hàng; nhà cung cấp lọc phần nhập hàng. Doanh thu chỉ tính đơn đã giao/hoàn tất và đã phân bổ giảm giá hóa đơn theo giá trị từng mặt hàng.</div>
+    </div>
+</div>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div asp-validation-summary="All" class="alert alert-warning"></div>
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h5 fw-bold mb-0">Kết quả báo cáo</h2>
+    <span class="badge bg-light text-dark border">Từ @Model.TuNgay.ToString("dd/MM/yyyy") đến @Model.DenNgay.ToString("dd/MM/yyyy")</span>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card h-100 border-primary">
+            <div class="card-body">
+                <div class="small text-muted">Doanh thu bán hàng</div>
+                <div class="h4 fw-bold text-primary mb-0">@Model.DoanhThu.ToString("N0") đ</div>
+                <div class="small text-muted">@Model.SoDonBan hóa đơn · @Model.SoLuongBan sản phẩm</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 border-success">
+            <div class="card-body">
+                <div class="small text-muted">Giá trị nhập hàng</div>
+                <div class="h4 fw-bold text-success mb-0">@Model.TienNhap.ToString("N0") đ</div>
+                <div class="small text-muted">@Model.SoPhieuNhap phiếu · @Model.SoLuongNhap sản phẩm</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 border-info">
+            <div class="card-body">
+                <div class="small text-muted">Mặt hàng phát sinh</div>
+                <div class="h4 fw-bold text-info mb-0">@Model.MatHangs.Count</div>
+                <div class="small text-muted">Có bán hoặc nhập trong kỳ</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card h-100 border-warning">
+            <div class="card-body">
+                <div class="small text-muted">Nhà cung cấp phát sinh</div>
+                <div class="h4 fw-bold text-warning-emphasis mb-0">@Model.NhaCungCapRows.Count</div>
+                <div class="small text-muted">Có phiếu nhập trong kỳ</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white fw-bold"><i class="bi bi-calendar3 me-2 text-primary"></i>Doanh thu và nhập hàng theo thời gian</div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>Ngày / kỳ</th><th class="text-end">Doanh thu</th><th class="text-end">Tiền nhập</th><th class="text-end">Chênh lệch</th></tr>
+            </thead>
+            <tbody>
+                @if (Model.ThoiGianRows.Count > 0)
+                {
+                    foreach (var row in Model.ThoiGianRows)
+                    {
+                        <tr>
+                            <td>@(Model.KyBaoCao == "nam" || Model.DenNgay.Subtract(Model.TuNgay).TotalDays > 62 ? row.MocThoiGian.ToString("MM/yyyy") : row.MocThoiGian.ToString("dd/MM/yyyy"))</td>
+                            <td class="text-end text-primary fw-semibold">@row.DoanhThu.ToString("N0") đ</td>
+                            <td class="text-end text-success fw-semibold">@row.TienNhap.ToString("N0") đ</td>
+                            <td class="text-end">@((row.DoanhThu - row.TienNhap).ToString("N0")) đ</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr><td colspan="4" class="text-center text-muted py-4">Không có phát sinh trong kỳ đã chọn.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white fw-bold"><i class="bi bi-box-seam me-2 text-primary"></i>Thống kê theo mặt hàng</div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>Mã hàng</th><th>Mặt hàng</th><th class="text-end">SL bán</th><th class="text-end">Doanh thu</th><th class="text-end">SL nhập</th><th class="text-end">Tiền nhập</th></tr>
+            </thead>
+            <tbody>
+                @if (Model.MatHangs.Count > 0)
+                {
+                    foreach (var row in Model.MatHangs)
+                    {
+                        <tr>
+                            <td><code>@row.MaSP</code></td>
+                            <td>@row.TenSP</td>
+                            <td class="text-end">@row.SoLuongBan</td>
+                            <td class="text-end">@row.DoanhThu.ToString("N0") đ</td>
+                            <td class="text-end">@row.SoLuongNhap</td>
+                            <td class="text-end">@row.TienNhap.ToString("N0") đ</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr><td colspan="6" class="text-center text-muted py-4">Không có mặt hàng phát sinh.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white fw-bold"><i class="bi bi-truck me-2 text-success"></i>Thống kê nhập hàng theo nhà cung cấp</div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr><th>Mã NCC</th><th>Nhà cung cấp</th><th class="text-end">Số phiếu nhập</th><th class="text-end">Số lượng nhập</th><th class="text-end">Giá trị nhập</th></tr>
+            </thead>
+            <tbody>
+                @if (Model.NhaCungCapRows.Count > 0)
+                {
+                    foreach (var row in Model.NhaCungCapRows)
+                    {
+                        <tr>
+                            <td><code>@row.MaNCC</code></td>
+                            <td>@row.TenNCC</td>
+                            <td class="text-end">@row.SoPhieuNhap</td>
+                            <td class="text-end">@row.SoLuongNhap</td>
+                            <td class="text-end fw-semibold">@row.TienNhap.ToString("N0") đ</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr><td colspan="5" class="text-center text-muted py-4">Không có phiếu nhập phù hợp.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const period = document.getElementById("kyBaoCao");
+            const updateFields = () => {
+                document.querySelectorAll(".period-field").forEach(field => {
+                    const visibleFor = field.dataset.period.split(",");
+                    field.classList.toggle("d-none", !visibleFor.includes(period.value));
+                });
+            };
+
+            period.addEventListener("change", updateFields);
+            updateFields();
+        })();
+    </script>
+}

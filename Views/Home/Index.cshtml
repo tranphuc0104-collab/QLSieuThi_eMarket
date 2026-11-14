@@ -69,7 +69,7 @@
     </div>
 </div>
 
-<!-- Lưới 9 Use Case trực quan -->
+<!-- Các lối tắt tương ứng với chức năng quản lý bên trái -->
 <div class="card mb-4">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0 fw-bold"><i class="bi bi-diagram-3-fill text-primary me-2"></i>Các chức năng quản lý</h5>
@@ -78,13 +78,13 @@
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-4">
-                <div class="card h-100 border-primary border-opacity-25 hover-shadow">
+                <div class="card h-100 border-primary border-opacity-25">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <h6 class="fw-bold mb-0">Theo dõi đơn hàng</h6>
+                            <h6 class="fw-bold mb-0">Quản lý sản phẩm</h6>
                         </div>
-                        <p class="text-muted small">Khách hàng kiểm tra trạng thái đơn: đang xử lý, đã hoàn tất theo mã đơn hàng.</p>
-                        <a asp-controller="Usecase" asp-action="TheoDoiDonHang" class="btn btn-sm btn-outline-primary w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                        <p class="text-muted small">Thêm, xem và cập nhật thông tin sản phẩm.</p>
+                        <a asp-controller="QuanLySanPham" asp-action="Index" class="btn btn-sm btn-outline-primary w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
                     </div>
                 </div>
             </div>
@@ -93,10 +93,10 @@
                 <div class="card h-100 border-primary border-opacity-25">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <h6 class="fw-bold mb-0">Đặt hàng trực tuyến</h6>
+                            <h6 class="fw-bold mb-0">Quản lý bán hàng</h6>
                         </div>
-                        <p class="text-muted small">Khách hàng chọn sản phẩm, kiểm tra tồn kho tự động, tạo đơn hàng thành công.</p>
-                        <a asp-controller="Usecase" asp-action="DatHang" class="btn btn-sm btn-outline-primary w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                        <p class="text-muted small">Lập đơn bán hàng, cập nhật tồn kho và ghi nhận doanh thu.</p>
+                        <a asp-controller="Usecase" asp-action="BanHang" class="btn btn-sm btn-outline-primary w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
                     </div>
                 </div>
             </div>
@@ -105,10 +105,10 @@
                 <div class="card h-100 border-primary border-opacity-25">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <h6 class="fw-bold mb-0">Tra cứu hàng hóa</h6>
+                            <h6 class="fw-bold mb-0">Thống kê - Báo cáo</h6>
                         </div>
-                        <p class="text-muted small">Tìm kiếm sản phẩm theo tên/mã, xem đơn giá bán hiện tại và hạn sử dụng sản phẩm.</p>
-                        <a asp-controller="Usecase" asp-action="TraCuuHangHoa" class="btn btn-sm btn-outline-primary w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                        <p class="text-muted small">Tổng hợp bán hàng, mặt hàng, nhà cung cấp theo ngày, tháng hoặc năm và in báo cáo.</p>
+                        <a asp-controller="Usecase" asp-action="BaoCao" class="btn btn-sm btn-outline-primary w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
                     </div>
                 </div>
             </div>
@@ -117,10 +117,10 @@
                 <div class="card h-100 border-success border-opacity-25">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <h6 class="fw-bold mb-0">Quản lý bán hàng</h6>
+                            <h6 class="fw-bold mb-0">Quản lý hóa đơn</h6>
                         </div>
-                        <p class="text-muted small">Nhân viên lập đơn hàng, áp giá riêng/niêm yết, trừ tồn kho và cập nhật số lượng đã bán.</p>
-                        <a asp-controller="Usecase" asp-action="BanHang" class="btn btn-sm btn-outline-success w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
+                        <p class="text-muted small">Tra cứu hóa đơn, xem chi tiết và cập nhật trạng thái đơn hàng.</p>
+                        <a asp-controller="Usecase" asp-action="HoaDon" class="btn btn-sm btn-outline-success w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
                     </div>
                 </div>
             </div>
@@ -131,7 +131,7 @@
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <h6 class="fw-bold mb-0">Quản lý khách hàng</h6>
                         </div>
-                        <p class="text-muted small">Chăm sóc khách hàng: Thêm mới, phân nhóm khách VIP, cập nhật thông tin và xóa khách hàng.</p>
+                        <p class="text-muted small">Thêm mới, cập nhật thông tin và chăm sóc khách hàng.</p>
                         <a asp-controller="Usecase" asp-action="KhachHang" class="btn btn-sm btn-outline-success w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
                     </div>
                 </div>
@@ -141,9 +141,9 @@
                 <div class="card h-100 border-success border-opacity-25">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-2 mb-2">
-                            <h6 class="fw-bold mb-0">Quản lý điểm mua hàng</h6>
+                            <h6 class="fw-bold mb-0">Quản lý điểm thưởng</h6>
                         </div>
-                        <p class="text-muted small">Tra cứu điểm thẻ thành viên từ lịch sử mua hàng, xử lý quy đổi điểm thưởng ra voucher mua sắm.</p>
+                        <p class="text-muted small">Tra cứu điểm thành viên và quản lý đổi điểm thưởng.</p>
                         <a asp-controller="Usecase" asp-action="DiemTichLuy" class="btn btn-sm btn-outline-success w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
                     </div>
                 </div>
@@ -155,7 +155,7 @@
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <h6 class="fw-bold mb-0">Quản lý nhập hàng</h6>
                         </div>
-                        <p class="text-muted small">Nhân viên kho tiếp nhận lô hàng từ Nhà cung cấp, lập phiếu nhập và tăng số lượng tồn kho.</p>
+                        <p class="text-muted small">Lập phiếu nhập hàng từ nhà cung cấp và cập nhật tồn kho.</p>
                         <a asp-controller="Usecase" asp-action="NhapHang" class="btn btn-sm btn-outline-warning text-dark w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
                     </div>
                 </div>
@@ -167,7 +167,7 @@
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <h6 class="fw-bold mb-0">Quản lý tồn kho</h6>
                         </div>
-                        <p class="text-muted small">Theo dõi số lượng đã bán, kiểm kê theo từng kho và nhận cảnh báo dưới tối thiểu / vượt tối đa.</p>
+                        <p class="text-muted small">Theo dõi số lượng và cảnh báo tồn kho theo từng kho.</p>
                         <a asp-controller="Usecase" asp-action="TonKho" class="btn btn-sm btn-outline-warning text-dark w-100">Mở giao diện <i class="bi bi-arrow-right"></i></a>
                     </div>
                 </div>

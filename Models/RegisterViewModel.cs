@@ -2,21 +2,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace EMarket.Models;
 
-public class LoginViewModel
-{
-    [Required(ErrorMessage = "Vui lòng nhập tên đăng nhập.")]
-    [StringLength(50)]
-    [Display(Name = "Tên đăng nhập")]
-    public string UserName { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "Vui lòng nhập mật khẩu.")]
-    [DataType(DataType.Password)]
-    [Display(Name = "Mật khẩu")]
-    public string Password { get; set; } = string.Empty;
-
-    public string? ReturnUrl { get; set; }
-}
-
 public class RegisterViewModel
 {
     [Required(ErrorMessage = "Vui lòng nhập họ tên.")]
@@ -55,13 +40,4 @@ public class RegisterViewModel
     [DataType(DataType.Password)]
     [Display(Name = "Xác nhận mật khẩu")]
     public string ConfirmPassword { get; set; } = string.Empty;
-}
-
-public class UserAccount
-{
-    public string UserName { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty;
-    public string Role { get; set; } = string.Empty;
-    public string DisplayName { get; set; } = string.Empty;
-    public string? CustomerId { get; set; }
 }

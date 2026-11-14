@@ -1,0 +1,20 @@
+@model EMarket.Models.SanPham
+@{
+    ViewData["Title"] = "Xóa sản phẩm";
+}
+
+<div class="card border-0 shadow-sm mx-auto" style="max-width: 680px;">
+    <div class="card-body p-4">
+        <h1 class="h4 fw-bold text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Xóa sản phẩm</h1>
+        <p>Bạn có chắc muốn xóa sản phẩm <strong>@Model.TenSP</strong> (@Model.MaSP)? Thao tác này sẽ xóa sản phẩm khỏi trang bán hàng.</p>
+        @if (!string.IsNullOrWhiteSpace(Model.HinhAnh))
+        {
+            <img src="@Model.HinhAnh" alt="@Model.TenSP" class="rounded border mb-3" style="width: 100px; height: 100px; object-fit: cover;" />
+        }
+        <form asp-action="DeleteConfirmed" method="post">
+            <input type="hidden" name="id" value="@Model.MaSP" />
+            <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Xóa sản phẩm</button>
+            <a asp-action="Index" class="btn btn-outline-secondary ms-2">Hủy</a>
+        </form>
+    </div>
+</div>

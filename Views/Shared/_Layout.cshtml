@@ -138,14 +138,16 @@
                         <i class="bi bi-grid-fill"></i><span>Tổng quan hệ thống</span>
                     </a>
                 </li>
-                <div class="sidebar-section-title">BÁN HÀNG & KHÁCH HÀNG</div>
+                <li class="nav-item">
+                    <a class="nav-link @(ViewContext.RouteData.Values["Controller"]?.ToString() == "QuanLySanPham" ? "active" : "")" asp-controller="QuanLySanPham" asp-action="Index">
+                        <i class="bi bi-box-seam"></i><span>Quản lý sản phẩm</span>
+                    </a>
+                </li>
+                <li class="nav-item"><a class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString() == "BaoCao" ? "active" : "")" asp-controller="Usecase" asp-action="BaoCao"><i class="bi bi-bar-chart-line"></i><span>Thống kê - Báo cáo</span></a></li>
                 <li class="nav-item"><a class="nav-link" asp-controller="Usecase" asp-action="BanHang"><i class="bi bi-cash-stack"></i><span>Quản lý bán hàng</span></a></li>
-                <li class="nav-item"><a class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString() == "XuLyDonHang" ? "active" : "")" asp-controller="Usecase" asp-action="XuLyDonHang"><i class="bi bi-clipboard2-check"></i><span>Xử lý đơn hàng</span></a></li>
                 <li class="nav-item"><a class="nav-link @(ViewContext.RouteData.Values["Action"]?.ToString() == "HoaDon" ? "active" : "")" asp-controller="Usecase" asp-action="HoaDon"><i class="bi bi-receipt"></i><span>Quản lý hóa đơn</span></a></li>
                 <li class="nav-item"><a class="nav-link" asp-controller="Usecase" asp-action="KhachHang"><i class="bi bi-people-fill"></i><span>Quản lý khách hàng</span></a></li>
                 <li class="nav-item"><a class="nav-link" asp-controller="Usecase" asp-action="DiemTichLuy"><i class="bi bi-award-fill"></i><span>Quản lý điểm thưởng</span></a></li>
-                <li class="nav-item"><a class="nav-link" asp-controller="Usecase" asp-action="TraCuuHangHoa"><i class="bi bi-search"></i><span>Tra cứu hàng hóa</span></a></li>
-                <div class="sidebar-section-title">KHO & CÔNG NỢ</div>
                 <li class="nav-item"><a class="nav-link" asp-controller="Usecase" asp-action="NhapHang"><i class="bi bi-box-arrow-in-down"></i><span>Quản lý nhập hàng</span></a></li>
                 <li class="nav-item"><a class="nav-link" asp-controller="Usecase" asp-action="TonKho"><i class="bi bi-boxes"></i><span>Quản lý tồn kho</span></a></li>
                 <li class="nav-item"><a class="nav-link" asp-controller="Usecase" asp-action="CongNo"><i class="bi bi-journal-text"></i><span>Quản lý công nợ</span></a></li>
@@ -176,7 +178,7 @@
                 @if (User.Identity?.IsAuthenticated == true)
                 {
                     <span class="badge bg-info bg-opacity-10 text-info border border-info">
-                        <i class="bi bi-person-circle me-1"></i> @User.Identity.Name · @(User.IsInRole("Admin") ? "Nhân viên" : "Khách hàng")
+                        <i class="bi bi-person-circle me-1"></i> @(User.IsInRole("Admin") ? "Nhân viên" : "Khách hàng")
                     </span>
                     <form asp-controller="Auth" asp-action="Logout" method="post" class="m-0">
                         <button class="btn btn-sm btn-outline-secondary" type="submit">Đăng xuất</button>
