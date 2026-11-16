@@ -682,11 +682,20 @@ namespace EMarket.Controllers
         // 5. UC5: QUẢN LÝ THÔNG TIN KHÁCH HÀNG (CRUD)
         // ==========================================
         [Authorize(Roles = "Admin")]
-        public IActionResult KhachHang()
+        public IActionResult KhachHang(string? keyword)
         {
             ViewBag.LoaiKhachHangs = _db.LoaiKhachHangs.ToList();
             ViewBag.NhanViens = _db.NhanViens.ToList();
-            return View(_db.KhachHangs.ToList());
+            ViewBag.Keyword = keyword;
+            var customers = _db.KhachHangs.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                var searchTerm = keyword.Trim();
+                customers = customers.Where(customer =>
+                    customer.HoTen.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return View(customers.ToList());
         }
 
         [Authorize(Roles = "Admin")]

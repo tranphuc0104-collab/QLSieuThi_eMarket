@@ -3,6 +3,7 @@
     ViewData["Title"] = "Quản Lý Khách Hàng";
     var loaiKHs = ViewBag.LoaiKhachHangs as List<EMarket.Models.LoaiKhachHang>;
     var nhanViens = ViewBag.NhanViens as List<EMarket.Models.NhanVien>;
+    var keyword = ViewBag.Keyword as string;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -21,6 +22,17 @@
 <div class="card shadow-sm mb-4">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0 fw-bold"><i class="bi bi-people-fill text-primary me-2"></i>Danh Sách Khách Hàng (@Model.Count)</h5>
+        <form method="get" asp-action="KhachHang" class="d-flex gap-2">
+            <input type="search" name="keyword" value="@keyword" class="form-control form-control-sm"
+                   placeholder="Tìm theo tên khách hàng" aria-label="Tìm theo tên khách hàng" />
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-search me-1"></i>Tìm
+            </button>
+            @if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                <a asp-action="KhachHang" class="btn btn-sm btn-outline-secondary">Xóa</a>
+            }
+        </form>
         <span class="badge bg-info">CSKH EMarket</span>
     </div>
     <div class="card-body p-0">
@@ -41,25 +53,25 @@
                 <tbody>
                     @foreach (var kh in Model)
                     {
+                        var tenLoai = kh.TenLoai ?? string.Empty;
+                        var mauPhanLoai = tenLoai.Contains("vàng", StringComparison.OrdinalIgnoreCase) ||
+                                          tenLoai.Contains("gold", StringComparison.OrdinalIgnoreCase) ||
+                                          tenLoai.Contains("VIP", StringComparison.OrdinalIgnoreCase)
+                            ? "bg-warning text-dark"
+                            : tenLoai.Contains("bạc", StringComparison.OrdinalIgnoreCase) ||
+                              tenLoai.Contains("silver", StringComparison.OrdinalIgnoreCase)
+                                ? "bg-light text-dark border"
+                                : tenLoai.Contains("thân thiết", StringComparison.OrdinalIgnoreCase)
+                                    ? "bg-info text-dark"
+                                    : tenLoai.Contains("doanh nghiệp", StringComparison.OrdinalIgnoreCase)
+                                        ? "bg-primary"
+                                        : "bg-secondary";
                         <tr>
                             <td><code>@kh.MaKhachHang</code></td>
                             <td>
                                 <strong class="text-dark">@kh.HoTen</strong>
                             </td>
-                            <td>
-                                @if (kh.MaLoai == "LKH03")
-                                {
-                                    <span class="badge bg-warning text-dark"><i class="bi bi-star-fill me-1"></i>VIP</span>
-                                }
-                                else if (kh.MaLoai == "LKH02")
-                                {
-                                    <span class="badge bg-info text-dark">Thân Thiết</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-secondary">Thông Thường</span>
-                                }
-                            </td>
+                            <td><span class="badge @mauPhanLoai">@(string.IsNullOrWhiteSpace(kh.TenLoai) ? "Chưa phân loại" : kh.TenLoai)</span></td>
                             <td>@kh.SoDienThoai</td>
                             <td><small class="text-muted">@kh.Email</small></td>
                             <td><small>@kh.DiaChi</small></td>
@@ -76,6 +88,14 @@
                                         <i class="bi bi-trash"></i> Xóa
                                     </button>
                                 </form>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                Không tìm thấy khách hàng nào@(string.IsNullOrWhiteSpace(keyword) ? "." : $" phù hợp với “{keyword}”.")
                             </td>
                         </tr>
                     }
