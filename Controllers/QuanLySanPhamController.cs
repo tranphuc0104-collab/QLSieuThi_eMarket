@@ -60,7 +60,7 @@ public class QuanLySanPhamController : Controller
 
             var product = CreateProduct(model, uploadedImage);
             await _sqlDataStore.AddProductAsync(product, _store);
-            TempData["Success"] = "Đã thêm sản phẩm.";
+            TempData["Success"] = "Thêm sản phẩm thành công.";
             return RedirectToAction(nameof(Index));
         }
         catch (InvalidDataException exception)

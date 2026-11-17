@@ -41,7 +41,7 @@
                 <form method="post" asp-action="TuDoiDiem" class="text-start mt-4">
                     <label for="pointsToRedeem" class="form-label fw-semibold">Đổi điểm lấy voucher (1 điểm = 1.000 đ)</label>
                     <div class="input-group">
-                        <input id="pointsToRedeem" type="number" name="soDiemDoi" class="form-control" min="10" max="@Model.DiemTichLuy" step="10" value="10" required />
+                        <input id="pointsToRedeem" type="number" name="soDiemDoi" class="form-control" min="10" max="@Model.DiemTichLuy" step="1" value="10" required />
                         <button type="submit" class="btn btn-success" @(Model.DiemTichLuy < 10 ? "disabled" : "")>Đổi điểm</button>
                     </div>
                     <div class="form-text">Voucher được lưu trong mục bên dưới, có hạn 90 ngày và chọn khi thanh toán ở cửa hàng.</div>

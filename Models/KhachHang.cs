@@ -14,8 +14,10 @@ public class KhachHang
     [Required]
     [StringLength(100)]
     public string HoTen { get; set; } = string.Empty;
+    [RegularExpression(PhoneNumberRules.VietnamesePhonePattern, ErrorMessage = PhoneNumberRules.InvalidVietnamesePhoneMessage)]
     [StringLength(20)]
     public string? SoDienThoai { get; set; }
+    [RegularExpression(EmailAddressRules.Pattern, ErrorMessage = EmailAddressRules.InvalidMessage)]
     [StringLength(100)]
     public string? Email { get; set; }
     [StringLength(255)]

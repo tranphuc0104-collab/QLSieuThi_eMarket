@@ -23,7 +23,7 @@ public class ProductFormViewModel
     [Display(Name = "Mô tả")]
     public string? MoTa { get; set; }
 
-    [Range(typeof(decimal), "0.01", "9999999999999999.99", ErrorMessage = "Giá bán phải lớn hơn 0.")]
+    [Range(typeof(decimal), "0.01", "9999999999999999.99", ErrorMessage = "Giá trị phải lớn hơn hoặc bằng 0,01.")]
     [Display(Name = "Giá bán (đ)")]
     public decimal GiaBan { get; set; }
 
@@ -35,7 +35,7 @@ public class ProductFormViewModel
     [Display(Name = "Đơn vị tính")]
     public string? DonViTinh { get; set; }
 
-    [Range(0, int.MaxValue, ErrorMessage = "Tồn kho không được là số âm.")]
+    [Range(0, int.MaxValue, ErrorMessage = "Giá trị phải lớn hơn hoặc bằng 0.")]
     [Display(Name = "Tồn kho")]
     public int SoLuongTon { get; set; }
 

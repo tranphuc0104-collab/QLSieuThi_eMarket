@@ -15,12 +15,12 @@ public class RegisterViewModel
     [Display(Name = "Tên đăng nhập")]
     public string UserName { get; set; } = string.Empty;
 
-    [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
+    [RegularExpression(EmailAddressRules.Pattern, ErrorMessage = EmailAddressRules.InvalidMessage)]
     [StringLength(100)]
     [Display(Name = "Email")]
     public string? Email { get; set; }
 
-    [Phone(ErrorMessage = "Số điện thoại không hợp lệ.")]
+    [RegularExpression(PhoneNumberRules.VietnamesePhonePattern, ErrorMessage = PhoneNumberRules.InvalidVietnamesePhoneMessage)]
     [StringLength(20)]
     [Display(Name = "Số điện thoại")]
     public string? PhoneNumber { get; set; }

@@ -4,8 +4,12 @@
     var khachHangs = ViewBag.KhachHangs as List<EMarket.Models.KhachHang>;
     var orders = ViewBag.Orders as List<EMarket.Models.DonHang>;
     var vouchers = ViewBag.Vouchers as List<EMarket.Models.Voucher> ?? new();
+    var memberCard = ViewBag.MemberCard as EMarket.Models.TheThanhVien;
     var success = ViewBag.Success as string;
     var error = ViewBag.Error as string;
+    var pointsToRedeem = ViewBag.PointsToRedeem is int submittedPoints
+        ? submittedPoints
+        : Math.Min(50, Model?.DiemTichLuy ?? 50);
     var memberCardLabel = Model?.MaLoai switch
     {
         "LKH03" => "Thẻ khách hàng VIP",
@@ -87,7 +91,14 @@
                         <i class="bi bi-shield-check me-1"></i> @memberCardLabel
                     </div>
                     <h4 class="fw-bold text-dark mb-1">@Model.HoTen</h4>
-                    <p class="text-muted small mb-3">Mã KH: <code>@Model.MaKhachHang</code> | ĐT: @Model.SoDienThoai</p>
+                    <p class="text-muted small mb-3">
+                        Mã KH: <code>@Model.MaKhachHang</code> | Mã thẻ: <code>@(memberCard?.MaThe ?? "Chưa cấp")</code>
+                        | ĐT: @Model.SoDienThoai
+                        @if (memberCard?.NgayLap is DateTime cardCreated)
+                        {
+                            <br /><span>Ngày cấp thẻ: @cardCreated.ToString("dd/MM/yyyy")</span>
+                        }
+                    </p>
 
                     <div class="p-3 bg-light rounded-3 my-3 border">
                         <span class="text-muted small text-uppercase fw-semibold">Điểm Thưởng Tích Lũy Hiện Tại</span>
@@ -101,11 +112,12 @@
                             <i class="bi bi-gift-fill me-1"></i> Quy Đổi Điểm Sang Voucher
                         </div>
                         <div class="card-body text-start">
-                            <form method="post" asp-action="QuyDoiDiem">
+                            <form method="post" asp-action="QuyDoiDiem" novalidate>
                                 <input type="hidden" name="maKhachHang" value="@Model.MaKhachHang" />
                                 <div class="mb-3">
                                     <label class="form-label small fw-semibold">Nhập số điểm muốn đổi (1 điểm = 1.000đ):</label>
-                                    <input type="number" name="soDiemDoi" class="form-control" min="10" max="@Model.DiemTichLuy" step="10" value="50" required />
+                                    <input id="staffPointsToRedeem" type="number" name="soDiemDoi" class="form-control" min="10" max="@Model.DiemTichLuy" step="1" value="@pointsToRedeem" required />
+                                    <div class="form-text">Giá trị voucher dự kiến: <strong id="staffVoucherValue">0 VNĐ</strong></div>
                                 </div>
                                 <button type="submit" class="btn btn-success w-100 fw-bold" @(Model.DiemTichLuy < 10 ? "disabled" : "")>
                                     <i class="bi bi-check2-circle me-1"></i> Xác Nhận Đổi Thưởng
@@ -134,6 +146,27 @@
                                             </div>
                                             <div class="small text-muted">Hạn @voucher.NgayHetHan.ToString("dd/MM/yyyy") · @(voucher.MaDonHangSuDung == null ? "Chưa sử dụng" : $"Đã dùng: {voucher.MaDonHangSuDung}")</div>
                                         </div>
+                                    }
+
+                                    @section Scripts {
+                                        @if (Model != null)
+                                        {
+                                            <script>
+                                                (() => {
+                                                    const pointsInput = document.getElementById("staffPointsToRedeem");
+                                                    const voucherValue = document.getElementById("staffVoucherValue");
+
+                                                    function updateVoucherValue() {
+                                                        const points = Number.parseInt(pointsInput.value, 10);
+                                                        const amount = Number.isInteger(points) && points > 0 ? points * 1000 : 0;
+                                                        voucherValue.textContent = amount.toLocaleString("vi-VN") + " VNĐ";
+                                                    }
+
+                                                    pointsInput.addEventListener("input", updateVoucherValue);
+                                                    updateVoucherValue();
+                                                })();
+                                            </script>
+                                        }
                                     }
                                 }
                             </div>

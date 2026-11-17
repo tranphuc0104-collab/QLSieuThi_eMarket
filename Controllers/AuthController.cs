@@ -32,6 +32,13 @@ public class AuthController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Login(LoginViewModel model)
     {
+        if (string.IsNullOrWhiteSpace(model.UserName) && string.IsNullOrWhiteSpace(model.Password))
+        {
+            ModelState.Clear();
+            ModelState.AddModelError(string.Empty, "Vui lòng nhập đầy đủ thông tin.");
+            return View(model);
+        }
+
         if (!ModelState.IsValid)
         {
             return View(model);
@@ -59,6 +66,8 @@ public class AuthController : Controller
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity));
+
+        TempData["Success"] = "Đăng nhập thành công.";
 
         if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
         {

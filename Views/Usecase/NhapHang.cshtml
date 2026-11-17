@@ -5,7 +5,13 @@
     var sanPhams = ViewBag.SanPhams as List<EMarket.Models.SanPham>;
     var recentImports = ViewBag.RecentImports as List<EMarket.Models.PhieuNhap>;
     var success = ViewBag.Success as string;
-    var error = ViewBag.Error as string;
+    var errors = ViewBag.Errors as List<string>;
+    var selectedMaNCC = ViewBag.ImportMaNCC as string;
+    var selectedMaKho = ViewBag.ImportMaKho as string;
+    var selectedMaSP = ViewBag.ImportMaSP as string;
+    var importSoLuong = ViewBag.ImportSoLuong is int quantity ? quantity : 10;
+    var importDonGiaNhap = ViewBag.ImportDonGiaNhap is decimal price ? price : 25000m;
+    var importHanSuDung = ViewBag.ImportHanSuDung as string;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -26,13 +32,18 @@
     </div>
 }
 
-@if (!string.IsNullOrEmpty(error))
+@if (errors?.Count > 0)
 {
     <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
         <i class="bi bi-exclamation-triangle-fill fs-3 me-3"></i>
         <div>
             <h5 class="alert-heading fw-bold mb-1">Thông tin nhập hàng không hợp lệ</h5>
-            <div>@error</div>
+            <ul class="mb-0">
+                @foreach (var message in errors)
+                {
+                    <li>@message</li>
+                }
+            </ul>
         </div>
     </div>
 }
@@ -45,7 +56,7 @@
                 <h5 class="mb-0 fw-bold"><i class="bi bi-file-earmark-plus me-2 text-warning"></i>Lập Phiếu Nhập Hàng Mới</h5>
             </div>
             <div class="card-body p-4">
-                <form method="post" asp-action="TaoPhieuNhap">
+                <form method="post" asp-action="TaoPhieuNhap" novalidate>
                     <div class="row">
                         <!-- Chọn nhà cung cấp -->
                         <div class="col-md-6 mb-3">
@@ -56,7 +67,7 @@
                                 {
                                     foreach (var n in nccs)
                                     {
-                                        <option value="@n.MaNCC">@n.TenNCC</option>
+                                        <option value="@n.MaNCC" selected="@(selectedMaNCC == n.MaNCC ? "selected" : null)">@n.TenNCC</option>
                                     }
                                 }
                             </select>
@@ -71,7 +82,7 @@
                                 {
                                     foreach (var k in khos)
                                     {
-                                        <option value="@k.MaKho">@k.TenKho</option>
+                                        <option value="@k.MaKho" selected="@(selectedMaKho == k.MaKho ? "selected" : null)">@k.TenKho</option>
                                     }
                                 }
                             </select>
@@ -87,7 +98,7 @@
                             {
                                 foreach (var sp in sanPhams)
                                 {
-                                    <option value="@sp.MaSP" data-unit="@sp.DonViTinh" data-expiry="@sp.HanSuDung?.ToString("yyyy-MM-dd")">
+                                    <option value="@sp.MaSP" data-unit="@sp.DonViTinh" data-price="@sp.GiaBan.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-expiry="@sp.HanSuDung?.ToString("yyyy-MM-dd")" selected="@(selectedMaSP == sp.MaSP ? "selected" : null)">
                                         @sp.MaSP - @sp.TenSP (ĐVT: @sp.DonViTinh - Tồn hiện tại: @sp.SoLuongTon)
                                     </option>
                                 }
@@ -99,19 +110,19 @@
                         <!-- Số lượng nhập -->
                         <div class="col-md-6 mb-3">
                             <label class="form-label fw-semibold">4. Số lượng nhập thực tế: <span class="text-danger">*</span></label>
-                            <input type="number" id="soLuongNhap" name="soLuong" class="form-control" min="1" value="10" required oninput="calcImportTotal()" />
+                            <input type="number" id="soLuongNhap" name="soLuong" class="form-control" min="1" value="@importSoLuong" required oninput="calcImportTotal()" />
                         </div>
 
                         <!-- Đơn giá nhập -->
                         <div class="col-md-6 mb-3">
                             <label class="form-label fw-semibold">5. Đơn giá nhập (VNĐ / ĐVT): <span class="text-danger">*</span></label>
-                            <input type="number" id="donGiaNhap" name="donGiaNhap" class="form-control" min="1000" step="500" value="25000" required oninput="calcImportTotal()" />
+                            <input type="number" id="donGiaNhap" name="donGiaNhap" class="form-control" min="1000" step="500" value="@importDonGiaNhap.ToString(System.Globalization.CultureInfo.InvariantCulture)" required oninput="calcImportTotal()" />
                         </div>
                     </div>
 
                     <div class="mb-3">
                         <label for="hanSuDung" class="form-label fw-semibold">6. Hạn sử dụng của lô hàng mới</label>
-                        <input type="date" id="hanSuDung" name="hanSuDung" class="form-control" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                        <input type="date" id="hanSuDung" name="hanSuDung" class="form-control" value="@importHanSuDung" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
                         <div class="form-text">Nếu nhập ngày, hạn sử dụng này sẽ cập nhật cho sản phẩm và hiển thị trong tra cứu hàng hóa. Để trống để giữ nguyên hạn hiện tại.</div>
                     </div>
 
@@ -165,7 +176,12 @@
     const importProductSelect = document.getElementById("selectNhapSP");
     const expiryInput = document.getElementById("hanSuDung");
     importProductSelect.addEventListener("change", function () {
-        expiryInput.value = this.selectedOptions[0]?.dataset.expiry || "";
+        const selectedProduct = this.selectedOptions[0];
+        expiryInput.value = selectedProduct?.dataset.expiry || "";
+        if (selectedProduct?.dataset.price) {
+            document.getElementById("donGiaNhap").value = selectedProduct.dataset.price;
+        }
+        calcImportTotal();
     });
 
     function calcImportTotal() {
@@ -174,5 +190,7 @@
         const total = qty * price;
         document.getElementById("totalImportPreview").innerText = total.toLocaleString('vi-VN') + " đ";
     }
+
+    calcImportTotal();
 </script>
 }

@@ -4,6 +4,11 @@
     var loaiKHs = ViewBag.LoaiKhachHangs as List<EMarket.Models.LoaiKhachHang>;
     var nhanViens = ViewBag.NhanViens as List<EMarket.Models.NhanVien>;
     var keyword = ViewBag.Keyword as string;
+    var editCustomer = ViewBag.EditCustomer as EMarket.Models.KhachHang;
+    var editError = ViewBag.EditError as string;
+    var editNameError = ViewBag.EditNameError as string;
+    var editPhoneError = ViewBag.EditPhoneError as string;
+    var editEmailError = ViewBag.EditEmailError as string;
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -175,7 +180,7 @@
 <div class="modal fade" id="modalSuaKH" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form asp-action="SuaKhachHang" method="post">
+            <form asp-action="SuaKhachHang" method="post" novalidate>
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square me-2 text-primary"></i>Cập Nhật Thông Tin Khách Hàng</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -184,12 +189,22 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Mã khách hàng (Khóa chính):</label>
-                            <input type="text" id="editMaKH" name="MaKhachHang" class="form-control bg-light" readonly />
+                            <input type="text" id="editMaKH" name="MaKhachHang" class="form-control bg-light" value="@editCustomer?.MaKhachHang" readonly />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Họ và tên: <span class="text-danger">*</span></label>
-                            <input type="text" id="editHoTen" name="HoTen" class="form-control" required />
+                            <input type="text" id="editHoTen" name="HoTen" class="form-control" value="@editCustomer?.HoTen" required />
+                            @if (!string.IsNullOrWhiteSpace(editNameError))
+                            {
+                                <span class="text-danger small">@editNameError</span>
+                            }
                         </div>
+                        @if (!string.IsNullOrWhiteSpace(editError))
+                        {
+                            <div class="col-12">
+                                <div class="alert alert-danger mb-0" role="alert">@editError</div>
+                            </div>
+                        }
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Phân loại khách:</label>
                             <select id="editMaLoai" name="MaLoai" class="form-select">
@@ -197,7 +212,7 @@
                                 {
                                     foreach (var l in loaiKHs)
                                     {
-                                        <option value="@l.MaLoai">@l.TenLoai</option>
+                                        <option value="@l.MaLoai" selected="@(editCustomer?.MaLoai == l.MaLoai ? "selected" : null)">@l.TenLoai</option>
                                     }
                                 }
                             </select>
@@ -209,22 +224,30 @@
                                 {
                                     foreach (var nv in nhanViens)
                                     {
-                                        <option value="@nv.MaNV">@nv.MaNV - @nv.VaiTro</option>
+                                        <option value="@nv.MaNV" selected="@(editCustomer?.MaNV == nv.MaNV ? "selected" : null)">@nv.MaNV - @nv.VaiTro</option>
                                     }
                                 }
                             </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Số điện thoại:</label>
-                            <input type="tel" id="editSoDienThoai" name="SoDienThoai" class="form-control" />
+                            <input type="tel" id="editSoDienThoai" name="SoDienThoai" class="form-control" value="@editCustomer?.SoDienThoai" />
+                            @if (!string.IsNullOrWhiteSpace(editPhoneError))
+                            {
+                                <span class="text-danger small">@editPhoneError</span>
+                            }
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Email:</label>
-                            <input type="email" id="editEmail" name="Email" class="form-control" />
+                            <input type="email" id="editEmail" name="Email" class="form-control" value="@editCustomer?.Email" />
+                            @if (!string.IsNullOrWhiteSpace(editEmailError))
+                            {
+                                <span class="text-danger small">@editEmailError</span>
+                            }
                         </div>
                         <div class="col-12">
                             <label class="form-label fw-semibold">Địa chỉ:</label>
-                            <input type="text" id="editDiaChi" name="DiaChi" class="form-control" />
+                            <input type="text" id="editDiaChi" name="DiaChi" class="form-control" value="@editCustomer?.DiaChi" />
                         </div>
                     </div>
                 </div>
@@ -250,6 +273,12 @@
 
         const modal = new bootstrap.Modal(document.getElementById("modalSuaKH"));
         modal.show();
+    }
+    @if (editCustomer != null)
+    {
+        <text>
+            bootstrap.Modal.getOrCreateInstance(document.getElementById("modalSuaKH")).show();
+        </text>
     }
 </script>
 }
